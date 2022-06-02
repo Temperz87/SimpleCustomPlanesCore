@@ -8,6 +8,7 @@ using UnityEngine;
 using Harmony;
 using VTOLVR.Multiplayer;
 using System.IO;
+using UnityEngine.UI;
 
 public class Main : VTOLMOD
 {
@@ -50,11 +51,14 @@ public class Main : VTOLMOD
             Debug.Log(address + " doesn't exist.");
         }
 
+        PilotSelectUI ui = Resources.FindObjectsOfTypeAll<PilotSelectUI>().FirstOrDefault(); // this should be fine cuz there's not many objects here
+        GameObject.Instantiate(ui.selectPilotDisplayObject, ui.selectPilotDisplayObject.transform.parent).AddComponent<LoadingTemplate>().gameObject.SetActive(false);
         base.ModLoaded();
     }
 
     private IEnumerator asyncLoad(string directory, string bundleName)
     {
+        LoadingTemplate.instance.AddVehicle(bundleName);
         AssetBundleCreateRequest request = AssetBundle.LoadFromFileAsync(directory + "/" + bundleName);
         yield return request;
         if (request.assetBundle == null)
@@ -63,6 +67,78 @@ public class Main : VTOLMOD
             yield break;
         }
         new PlaneInformation(request.assetBundle, directory);
+        LoadingTemplate.instance.RemoveVehicle(bundleName);
+    }
+}
+
+public class LoadingTemplate : MonoBehaviour
+{
+    public static LoadingTemplate instance;
+    public bool hasVehicle = false;
+
+    private GameObject textTemplate;
+    private PilotSelectUI pui;
+    private Dictionary<string, GameObject> loadingVehicles = new Dictionary<string, GameObject>();
+    private int currIdx = 0;
+
+    public void Awake()
+    {
+        instance = this;
+        pui = GetComponentInParent<PilotSelectUI>();
+        transform.Find("nameBorder").gameObject.SetActive(false);
+        transform.Find("NameText").gameObject.SetActive(false);
+        transform.Find("EditName").gameObject.SetActive(false);
+        transform.Find("StartButton").gameObject.SetActive(false);
+        transform.Find("Lable (1)").gameObject.GetComponent<Text>().text = "Loading Vehicles";
+        textTemplate = transform.Find("Label").gameObject;
+        textTemplate.SetActive(false);
+    }
+
+    public void Open()
+    {
+        pui.selectPilotDisplayObject.SetActive(false);
+        gameObject.SetActive(true);
+    }
+
+    public void AddVehicle(string name)
+    {
+        hasVehicle = true;
+        GameObject newTemplate = Instantiate(textTemplate, textTemplate.transform.parent);
+        newTemplate.GetComponent<Text>().text = name;
+        newTemplate.transform.localPosition = new Vector3(0.0001296997f, 383 - (81 * currIdx), 0f);
+        newTemplate.gameObject.SetActive(true);
+        loadingVehicles.Add(name, newTemplate);
+        currIdx++;
+    }
+
+    public void RemoveVehicle(string name)
+    {
+        loadingVehicles[name].SetActive(false);
+        loadingVehicles.Remove(name);
+        currIdx--;
+        if (loadingVehicles.Count == 0)
+        {
+            hasVehicle = false;
+            pui.StartSelectedPilotButton();
+            return;
+        }
+        for (int i = 0; i < currIdx; i++)
+            loadingVehicles.Values.ToArray()[i].transform.localPosition = new Vector3(0.0001296997f, 383 - (81 * i), 0f);
+    }
+}
+
+[HarmonyPatch(typeof(PilotSelectUI))]
+[HarmonyPatch("StartSelectedPilotButton")]
+public class Ensure_VehiclesLoaded
+{
+    public static bool Prefix()
+    {
+        if (LoadingTemplate.instance.hasVehicle)
+        {
+            LoadingTemplate.instance.Open();
+            return false;
+        }
+        return true;
     }
 }
 

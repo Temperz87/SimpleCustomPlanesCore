@@ -15,6 +15,7 @@ public class PlaneInformation
 {
     public static List<PlaneInformation> planes = new List<PlaneInformation>();
 
+
     public PlaneInformation(AssetBundle bundle, string scpPath)
     {
         Debug.Log("Try load plane from path " + scpPath);

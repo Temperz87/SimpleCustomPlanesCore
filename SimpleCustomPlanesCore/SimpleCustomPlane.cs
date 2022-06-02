@@ -8,6 +8,7 @@ using System.IO;
 using UnityEngine.Events;
 using System.Text;
 using System.Globalization;
+using System.Linq;
 
 public class SimpleCustomPlane : MonoBehaviour
 {
@@ -237,19 +238,33 @@ public class SimpleCustomPlane : MonoBehaviour
         }
         public class Instruction
         {
+            public int indentation = 0;
+
             private string field;
             private string value;
             private string type;
-            private List<Instruction> arrayInstructions = new List<Instruction>();
-            private int size = 0;
+            private List<string> allTypes = new List<string>();
+            private List<Instruction> subInstructions = new List<Instruction>();
+            private Instruction lastNewObject = null;
 
             public InstructionType instruction;
 
             public void AddInstruction(string line)
             {
-                line = line.Trim();
-                arrayInstructions.Add(new Instruction(line, true));
-                size++;
+                Instruction toAdd = new Instruction(line.Trim(), true);
+                if (toAdd.instruction == InstructionType.ignore)
+                    return;
+                if (line.Length >= indentation + 15 && line.Substring(0, indentation + 15) == string.Concat(Enumerable.Repeat(" ", indentation + 15)))
+                {
+                    lastNewObject.AddInstruction(line);
+                    return;
+                }
+                else if (toAdd.instruction == InstructionType.newObject)
+                {
+                    lastNewObject = toAdd;
+                    lastNewObject.indentation = 4 + indentation;
+                }
+                subInstructions.Add(toAdd);
             }
 
             public Instruction(string newLine, bool isSubInstruction) // you can pass in anything for the second arg, i'm just overloading here
@@ -280,6 +295,16 @@ public class SimpleCustomPlane : MonoBehaviour
                     instruction = InstructionType.qsComponent;
                     value = NextElement(newLine, 0);
                     type = NextElement(newLine, 1);
+                }
+                else if (newLine[0] == 'n')
+                {
+                    instruction = InstructionType.newObject;
+                    field = NextElement(newLine, 0);
+                    type = NextElement(newLine, 1);
+                    if (int.Parse(NextElement(newLine, 2)) > 0)
+                    {
+                        allTypes = ConfigNodeUtils.ParseList(NextElement(newLine, 3));
+                    }
                 }
             }
 
@@ -324,9 +349,19 @@ public class SimpleCustomPlane : MonoBehaviour
                     instruction = InstructionType.qsComponent;
                     type = newLine.Substring(newLine.IndexOf(" ") + 1).Trim();
                 }
+                else if (newLine[0] == 'n')
+                {
+                    instruction = InstructionType.newObject;
+                    field = NextElement(newLine, 0);
+                    type = NextElement(newLine, 1);
+                    if (int.Parse(NextElement(newLine, 2)) > 0)
+                    {
+                        allTypes = ConfigNodeUtils.ParseList(NextElement(newLine, 3));
+                    }
+                }
             }
 
-            public void Run(Component original, Dictionary<string, Transform> allTransforms)
+            public void Run(object original, Dictionary<string, Transform> allTransforms)
             {
                 //Debug.Log("Running " + instruction);
                 if (instruction == InstructionType.assign)
@@ -335,7 +370,7 @@ public class SimpleCustomPlane : MonoBehaviour
                     FieldInfo fInfo = original.GetType().GetField(field.Trim());
                     if (fInfo == null && !(original is Renderer))
                     {
-                        Debug.LogError("info was null on object " + original.name + " while trying to find field " + field + " of type " + type);
+                        Debug.LogError("info was null on object " + original + " while trying to find field " + field + " of type " + type);
                         return;
                     }
                     switch (type.Trim())
@@ -393,7 +428,7 @@ public class SimpleCustomPlane : MonoBehaviour
                     else
                     {
                         if (original.GetType().GetField(field) == null)
-                            Debug.LogError("Couldn't resolve field " + field.Trim() + " on tf " + value.Trim() + " for " + original.name);
+                            Debug.LogError("Couldn't resolve field " + field.Trim() + " on tf " + value.Trim() + " for " + original);
                         else if (value.Trim() == "null")
                             original.GetType().GetField(field).SetValue(original, null);
                         else if (!allTransforms.ContainsKey(value.Trim()))
@@ -401,10 +436,10 @@ public class SimpleCustomPlane : MonoBehaviour
                         else
                         {
                             if (original.GetType().GetField(field) == null)
-                                Debug.LogError("Couldn't resolve field " + field.Trim() + " on tf " + value.Trim() + " for " + original.name);
+                                Debug.LogError("Couldn't resolve field " + field.Trim() + " on tf " + value.Trim() + " for " + original);
                             else
                                 original.GetType().GetField(field).SetValue(original, allTransforms[value.Trim()].gameObject.GetComponent(newType));
-                            Debug.Log("Did pointer instruction, value is " + value + " and type is " + type + " and field is " + field + " on " + original.name);
+                            Debug.Log("Did pointer instruction, value is " + value + " and type is " + type + " and field is " + field + " on " + original);
                         }
                     }
                 }
@@ -420,12 +455,12 @@ public class SimpleCustomPlane : MonoBehaviour
                     FieldInfo fInfo = original.GetType().GetField(field);
                     if (fInfo == null)
                     {
-                        Debug.LogError("info was null on object " + original.name + " while trying to find field " + field + " of type " + type);
+                        Debug.LogError("info was null on object " + original + " while trying to find field " + field + " of type " + type);
                         return;
                     }
-                    Array newArray = ResizeArray((Array)fInfo.GetValue(original), size);
-                    for (int i = 0; i < arrayInstructions.Count; i++)
-                        newArray.SetValue(arrayInstructions[i].GetArrayValue(allTransforms), i);
+                    Array newArray = ResizeArray((Array)fInfo.GetValue(original), subInstructions.Count);
+                    for (int i = 0; i < subInstructions.Count; i++)
+                        newArray.SetValue(subInstructions[i].GetArrayValue(allTransforms), i);
                     original.GetType().GetField(field).SetValue(original, newArray);
                 }
                 else if (instruction == InstructionType.qsComponent)
@@ -435,7 +470,7 @@ public class SimpleCustomPlane : MonoBehaviour
                     Debug.Log("new list.");
                     //EngineEffects.EngineAudioFX originalSound = ((VTOLQuickStart)original).quickStartComponents.engines[0].engine.engineEffects.audioEffects[0];
                     Debug.Log("original sound.");
-                    foreach (Instruction instruction in arrayInstructions)
+                    foreach (Instruction instruction in subInstructions)
                     {
                         VTOLQuickStart.QuickStartComponents.QSEngine qsEngine = (VTOLQuickStart.QuickStartComponents.QSEngine)instruction.GetArrayValue(allTransforms);
                         Debug.Log("adding new qsEngine, null is " + qsEngine == null);
@@ -463,6 +498,32 @@ public class SimpleCustomPlane : MonoBehaviour
                         ((VTOLQuickStart)original).quickStartComponents.engines = qsEngines.ToArray();
                     else if (type == "quickStopComponents")
                         ((VTOLQuickStart)original).quickStopComponents.engines = qsEngines.ToArray();
+                }
+                else if (instruction == InstructionType.newObject)
+                {
+                    object newObject = null;
+                    if (type.Contains("PlayerVehicle"))
+                        return;
+                    List<Type> ctorTypes = new List<Type>();
+                    foreach (string type in allTypes)
+                    {
+                        ctorTypes.Add(Type.GetType(type));
+                    }
+                    List<object> ctorObj = new List<object>();
+                    foreach (Type newType in ctorTypes)
+                    {
+                        if (newType.IsValueType)
+                            ctorObj.Add(Activator.CreateInstance(newType));
+                        else
+                            ctorObj.Add(null);
+                    }
+                    newObject = Type.GetType(type).GetConstructor(ctorTypes.ToArray()).Invoke(ctorObj.ToArray());
+                    foreach (Instruction instruction in subInstructions)
+                    {
+                        //Debug.Log("Running instruction " + instruction.instruction + " of indentation " + instruction.indentation + " of field " + instruction.field + " of type " + instruction.type + " of value " + instruction.value);
+                        instruction.Run(newObject, allTransforms);
+                    }
+                    original.GetType().GetField(field).SetValue(original, newObject);
                 }
             }
             private object GetArrayValue(Dictionary<string, Transform> allTransforms) // this is a shit implementation
@@ -519,6 +580,29 @@ public class SimpleCustomPlane : MonoBehaviour
                     //Debug.Log("returning qsComponent");
                     return qsEngine;
                 }
+                else if (instruction == InstructionType.newObject)
+                {
+                    object newObject = null;
+                    List<Type> ctorTypes = new List<Type>();
+                    foreach (string type in allTypes)
+                    {
+                        ctorTypes.Add(Type.GetType(type));
+                    }
+                    List<object> ctorObj = new List<object>();
+                    foreach (Type newType in ctorTypes)
+                    {
+                        if (newType.IsValueType)
+                            ctorObj.Add(Activator.CreateInstance(newType));
+                        else
+                            ctorObj.Add(null);
+                    }
+                    newObject = Type.GetType(type).GetConstructor(ctorTypes.ToArray()).Invoke(ctorObj.ToArray());
+                    foreach (Instruction instruction in subInstructions)
+                    {
+                        instruction.Run(newObject, allTransforms);
+                    }
+                    return newObject;
+                }
                 Debug.LogWarning("Couldn't resolve type for sub array.");
                 return null;
             }
@@ -537,7 +621,8 @@ public class SimpleCustomPlane : MonoBehaviour
                 pointer = 2,
                 events = 4,
                 array = 8,
-                qsComponent = 16
+                qsComponent = 16,
+                newObject
             }
         }
     }

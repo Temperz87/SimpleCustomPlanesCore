@@ -9,6 +9,7 @@ using UnityEngine.Events;
 using Valve.Newtonsoft.Json;
 using System.Text;
 using System.Globalization;
+using System.Linq;
 
 public class PlaneBaseIdentifier : MonoBehaviour
 {
@@ -795,26 +796,33 @@ public class PlaneBaseIdentifier : MonoBehaviour
         }
         public class Instruction
         {
+            public int indentation = 0;
+
             private string field;
             private string value;
             private string type;
             private List<string> allTypes = new List<string>();
             private List<Instruction> subInstructions = new List<Instruction>();
             private Instruction lastNewObject = null;
-            private int size = 0;
 
             public InstructionType instruction;
 
             public void AddInstruction(string line)
             {
                 Instruction toAdd = new Instruction(line.Trim(), true);
-                if (toAdd.instruction == InstructionType.newObject)
+                if (toAdd.instruction == InstructionType.ignore)
+                    return;
+                if (line.Length >= indentation + 15 && line.Substring(0, indentation + 15) == string.Concat(Enumerable.Repeat(" ", indentation + 15)))
+                {
+                    lastNewObject.AddInstruction(line);
+                    return;
+                }
+                else if (toAdd.instruction == InstructionType.newObject)
+                {
                     lastNewObject = toAdd;
-                if ((instruction != InstructionType.array && line.Length >= 15 && line.Substring(0, 15) == "               ") || (instruction == InstructionType.array && line.Substring(0, 23) == "                        "))
-                    lastNewObject.subInstructions.Add(toAdd);
-                else
-                    subInstructions.Add(new Instruction(line.Trim(), true));
-                size++;
+                    lastNewObject.indentation = 4 + indentation;
+                }
+                subInstructions.Add(toAdd);
             }
 
             public Instruction(string newLine, bool isSubinstruction) // bool here is present for "fun" overloading
@@ -887,6 +895,7 @@ public class PlaneBaseIdentifier : MonoBehaviour
                     instruction = InstructionType.array;
                     type = NextElement(newLine, 0);
                     field = NextElement(newLine, 1);
+                    indentation = 4;
                 }
                 else if (newLine[0] == 'q')
                 {
@@ -907,7 +916,7 @@ public class PlaneBaseIdentifier : MonoBehaviour
 
             public void Run(object original, Dictionary<string, Transform> allTransforms, bool log)
             {
-                //Debug.Log("Running " + instruction);
+                //Debug.Log("Running " + instruction + " " + UnityEngine.Random.Range(0, 999999));
                 if (instruction == InstructionType.assign)
                 {
                     if (log)
@@ -940,6 +949,11 @@ public class PlaneBaseIdentifier : MonoBehaviour
                                 Debug.Log("Setting int for " + field + " and value " + value);
                             original.GetType().GetField(field).SetValue(original, Int32.Parse(value));
                             break;
+                        case "Double":
+                            if (log)
+                                Debug.Log("HOLY SHIT WE GOT A DOUBLE WHAT THE FUCK");
+                            original.GetType().GetField(field).SetValue(original, double.Parse(value));
+                            break;
                         default:
                             if (original.GetType().GetField(field) != null && original.GetType().GetField(field).FieldType.IsSubclassOf(typeof(Enum)))
                             {
@@ -948,18 +962,34 @@ public class PlaneBaseIdentifier : MonoBehaviour
                                 original.GetType().GetField(field).SetValue(original, int.Parse(value));
                             }
                             else
-                                Debug.LogError("Couldn't resolve type for assign instruction of field " + field);
+                                Debug.LogError("Couldn't resolve type for assign instruction of field " + field + " and type " + type);
                             break;
                     }
                 }
                 else if (instruction == InstructionType.pointer)
                 {
-                    // holy shit this is going to give me a fucking aneurism implementing i am not looking forward to this
-                    // Debug.Log("Try do pointer instruction, value is " + value + " and type is " + type + " and field is " + field + " on " + original.name);
+                    // holy shit this is going to give me a fucking aneurism implementing i am not looking forward to this : It wasn't that bad honestly
+                    if (log)
+                        Debug.Log("Try do pointer instruction, value is " + value + " and type is " + type + " and field is " + field + " on " + original);
                     Type newType = Type.GetType(type.Trim());
                     if (newType == null)
-                        Debug.LogError("Couldn't get type for pointer " + type + " of value " + value);
-                    else if (type.Contains("UnityEngine.GameObject"))
+                    {
+                        newType = Type.GetType(value.Trim());
+                        if (newType != null)
+                        {
+                            string temp = type;
+                            type = value;
+                            value = temp;
+                            if (log)
+                                Debug.Log("Switched values for strings instruction");
+                        }
+                        else
+                        {
+                            Debug.LogWarning("Couldn't get type for pointer " + type + " of value " + value);
+                            return;
+                        }
+                    }
+                    if (type.Contains("UnityEngine.GameObject"))
                     {
                         if (value.Trim() == "null")
                             original.GetType().GetField(field).SetValue(original, null);
@@ -1000,7 +1030,9 @@ public class PlaneBaseIdentifier : MonoBehaviour
                 else if (instruction == InstructionType.array)
                 {
                     // This one was fun :) no it wasn't i wrote the comment when it was 95% done i am having a mental breakdown rn
-                    Array newArray = ResizeArray((Array)original.GetType().GetField(field).GetValue(original), size);
+                    if (log)
+                        Debug.Log("Doing array for type " + type + " of field " + field + " and count is: " + subInstructions.Count);
+                    Array newArray = ResizeArray((Array)original.GetType().GetField(field).GetValue(original), subInstructions.Count);
                     for (int i = 0; i < subInstructions.Count; i++)
                         newArray.SetValue(subInstructions[i].GetArrayValue(allTransforms), i);
                     original.GetType().GetField(field).SetValue(original, newArray);
@@ -1039,6 +1071,7 @@ public class PlaneBaseIdentifier : MonoBehaviour
                     newObject = Type.GetType(type).GetConstructor(ctorTypes.ToArray()).Invoke(ctorObj.ToArray());
                     foreach (Instruction instruction in subInstructions)
                     {
+                        //Debug.Log("Running instruction " + instruction.instruction + " of indentation " + instruction.indentation + " of field " + instruction.field + " of type " + instruction.type + " of value " + instruction.value);
                         instruction.Run(newObject, allTransforms, false);
                     }
                     original.GetType().GetField(field).SetValue(original, newObject);
@@ -1116,6 +1149,29 @@ public class PlaneBaseIdentifier : MonoBehaviour
                         Debug.LogError("Couldn't find value " + value + " for qsEngine");
                         return null;
                     }
+                }
+                else if (instruction == InstructionType.newObject)
+                {
+                    object newObject = null;
+                    List<Type> ctorTypes = new List<Type>();
+                    foreach (string type in allTypes)
+                    {
+                        ctorTypes.Add(Type.GetType(type));
+                    }
+                    List<object> ctorObj = new List<object>();
+                    foreach (Type newType in ctorTypes)
+                    {
+                        if (newType.IsValueType)
+                            ctorObj.Add(Activator.CreateInstance(newType));
+                        else
+                            ctorObj.Add(null);
+                    }
+                    newObject = Type.GetType(type).GetConstructor(ctorTypes.ToArray()).Invoke(ctorObj.ToArray());
+                    foreach (Instruction instruction in subInstructions)
+                    {
+                        instruction.Run(newObject, allTransforms, false);
+                    }
+                    return newObject;
                 }
                 Debug.LogWarning("Couldn't resolve type for sub array.");
                 return null;
