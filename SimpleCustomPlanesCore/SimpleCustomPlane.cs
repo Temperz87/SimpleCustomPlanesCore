@@ -129,7 +129,9 @@ public class SimpleCustomPlane : MonoBehaviour
                     if (instruction == null)
                         Debug.LogError("How the fuck was an instruction null?");
                     else
+                    {
                         instruction.Run(currentComponent, allTfs);
+                    }
                 }
             }
         }
@@ -211,7 +213,7 @@ public class SimpleCustomPlane : MonoBehaviour
                 if (currentLine[0] != ' ')
                 {
                     currentDict = new Dictionary<string, List<Instruction>>();
-                    //Debug.Log("adding line " + currentLine);
+                    Debug.Log("adding line " + currentLine);
                     result.Add(currentLine, currentDict);
                 }
                 else if (currentLine[5] != ' ')
@@ -224,12 +226,13 @@ public class SimpleCustomPlane : MonoBehaviour
                 }
                 else if (currentLine.Substring(0, 12) == "            ")
                 {
-                    //Debug.Log("adding new sub instruction to instruction " + currentLine);
+                    Debug.Log("adding new sub instruction to instruction " + currentLine);
                     currentInstruction.AddInstruction(currentLine);
                 }
                 else
                 {
                     currentInstruction = new Instruction(currentLine);
+                    Debug.Log("new instruction " + currentLine);
                     currentList.Add(currentInstruction);
                 }
             }
@@ -259,7 +262,7 @@ public class SimpleCustomPlane : MonoBehaviour
                     lastNewObject.AddInstruction(line);
                     return;
                 }
-                else if (toAdd.instruction == InstructionType.newObject)
+                else if (toAdd.instruction == InstructionType.newObject || toAdd.instruction == InstructionType.array)
                 {
                     lastNewObject = toAdd;
                     lastNewObject.indentation = 4 + indentation;
@@ -272,29 +275,29 @@ public class SimpleCustomPlane : MonoBehaviour
                 if (newLine[0] == 'a' && newLine[1] == 's')
                 {
                     instruction = InstructionType.assign;
-                    value = NextElement(newLine, 0);
-                    type = NextElement(newLine, 1);
+                    type = NextElement(newLine, 0);
+                    value = NextElement(newLine, 1);
+                    field = newLine.Substring(7, newLine.Substring(7).IndexOf(" "));
+                }
+                else if (newLine[0] == 'a' && newLine[1] == 'r')
+                {
+                    instruction = InstructionType.array;
+                    type = NextElement(newLine, 0);
+                    if (Type.GetType(type) == null)
+                    {
+                        field = NextElement(newLine, 0);
+                        type = NextElement(newLine, 1);
+                    }
+                    else
+                        field = NextElement(newLine, 1);
                 }
                 else if (newLine[0] == 'p')
                 {
                     instruction = InstructionType.pointer;
                     newLine = newLine.Substring(8);
                     field = newLine.Substring(0, newLine.IndexOf(" "));
-                    value = NextElement(newLine, 0);
-                    type = NextElement(newLine, 1);
-                }
-                else if (newLine[0] == 'n')
-                {
-                    instruction = InstructionType.events;
-                    newLine = newLine.Substring(4);
-                    field = newLine.Substring(0, newLine.IndexOf(" "));
                     type = NextElement(newLine, 0);
-                }
-                else if (newLine[0] == 'q')
-                {
-                    instruction = InstructionType.qsComponent;
-                    value = NextElement(newLine, 0);
-                    type = NextElement(newLine, 1);
+                    value = NextElement(newLine, 1);
                 }
                 else if (newLine[0] == 'n')
                 {
@@ -343,11 +346,7 @@ public class SimpleCustomPlane : MonoBehaviour
                     instruction = InstructionType.array;
                     type = NextElement(newLine, 0);
                     field = NextElement(newLine, 1);
-                }
-                else if (newLine[0] == 'q')
-                {
-                    instruction = InstructionType.qsComponent;
-                    type = newLine.Substring(newLine.IndexOf(" ") + 1).Trim();
+                    indentation = 4;
                 }
                 else if (newLine[0] == 'n')
                 {
@@ -363,7 +362,12 @@ public class SimpleCustomPlane : MonoBehaviour
 
             public void Run(object original, Dictionary<string, Transform> allTransforms)
             {
-                //Debug.Log("Running " + instruction);
+                if (original == null)
+                {
+                    Debug.LogWarning("Original is null");
+                    return;
+                }
+                Debug.Log("Running " + instruction + " type is " + type + " field is " + field + " value is " + value);
                 if (instruction == InstructionType.assign)
                 {
                     //Debug.Log("Try do assign instruction, value is " + value + " and type is " + type + " and field is " + field);
@@ -376,24 +380,28 @@ public class SimpleCustomPlane : MonoBehaviour
                     switch (type.Trim())
                     {
                         case "String":
-                            //Debug.Log("Setting string for " + field + " and value " + value);
+                            Debug.Log("Setting string for " + field + " and value " + value);
                             fInfo.SetValue(original, value);
                             //Debug.Log("Set string for " + field + " and value " + value);
                             break;
                         case "Boolean":
-                            //Debug.Log("Setting bool for " + field + " and value " + value + " original " + original.GetType());
+                            Debug.Log("Setting bool for " + field + " and value " + value + " original " + original.GetType());
                             if (original is Renderer)
                                 ((Renderer)original).enabled = value.Trim() == "True";
                             else
                                 fInfo.SetValue(original, value.Trim() == "True");
                             break;
                         case "Single":
-                            //Debug.Log("Setting float for " + field + " and value " + value);
+                            Debug.Log("Setting float for " + field + " and value " + value);
                             fInfo.SetValue(original, float.Parse(value));
                             break;
                         case "Int32":
                             Debug.Log("Setting int for " + field + " and value " + value);
                             fInfo.SetValue(original, Int32.Parse(value));
+                            break;
+                        case "Double":
+                            Debug.Log("HOLY SHIT WE GOT A DOUBLE WHAT THE FUCK");
+                            original.GetType().GetField(field).SetValue(original, double.Parse(value));
                             break;
                         default:
                             if (original.GetType().GetField(field) != null && original.GetType().GetField(field).FieldType.IsSubclassOf(typeof(Enum)))
@@ -409,14 +417,24 @@ public class SimpleCustomPlane : MonoBehaviour
                 else if (instruction == InstructionType.pointer)
                 {
                     // holy shit this is going to give me a fucking aneurism implementing i am not looking forward to this
-                    //Debug.Log("Try do pointer instruction, value is " + value + " and type is " + type + " and field is " + field + " on " + original.name);
+                    Debug.Log("Try do pointer instruction, value is " + value + " and type is " + type + " and field is " + field + " on " + original);
                     Type newType = Type.GetType(type.Trim());
                     if (newType == null)
                     {
-                        Debug.LogError("Couldn't get type for pointer " + type + " of value " + value);
-                        return;
+                        newType = Type.GetType(value.Trim());
+                        if (newType != null)
+                        {
+                            string temp = type;
+                            type = value;
+                            value = temp;
+                        }
+                        else
+                        {
+                            Debug.LogWarning("Couldn't get type for pointer " + type + " of value " + value);
+                            return;
+                        }
                     }
-                    else if (type.Contains("UnityEngine.GameObject"))
+                    if (type.Contains("UnityEngine.GameObject"))
                     {
                         if (value.Trim() == "null")
                             original.GetType().GetField(field).SetValue(original, null);
@@ -429,17 +447,23 @@ public class SimpleCustomPlane : MonoBehaviour
                     {
                         if (original.GetType().GetField(field) == null)
                             Debug.LogError("Couldn't resolve field " + field.Trim() + " on tf " + value.Trim() + " for " + original);
-                        else if (value.Trim() == "null")
-                            original.GetType().GetField(field).SetValue(original, null);
-                        else if (!allTransforms.ContainsKey(value.Trim()))
-                            Debug.LogError("Couldn't resolve tf " + value.Trim());
                         else
                         {
-                            if (original.GetType().GetField(field) == null)
-                                Debug.LogError("Couldn't resolve field " + field.Trim() + " on tf " + value.Trim() + " for " + original);
+                            if (value.Trim() == "null")
+                                original.GetType().GetField(field).SetValue(original, null);
                             else
-                                original.GetType().GetField(field).SetValue(original, allTransforms[value.Trim()].gameObject.GetComponent(newType));
-                            Debug.Log("Did pointer instruction, value is " + value + " and type is " + type + " and field is " + field + " on " + original);
+                            {
+                                try
+                                {
+                                    if (allTransforms[value.Trim()].gameObject.GetComponent(newType) != null)
+                                        original.GetType().GetField(field).SetValue(original, allTransforms[value.Trim()].gameObject.GetComponent(newType));
+                                }
+                                catch (KeyNotFoundException e)
+                                {
+                                    Debug.LogError("Couldn't get value " + value.Trim() + " on field " + field);
+                                }
+                            }
+                            //Debug.Log("Did pointer instruction, value is " + value + " and type is " + type + " and field is " + field + " on " + original.name);
                         }
                     }
                 }
@@ -451,53 +475,38 @@ public class SimpleCustomPlane : MonoBehaviour
                 else if (instruction == InstructionType.array)
                 {
                     // This one was fun :) no it wasn't i wrote the comment when it was 95% done i am having a mental breakdown rn
-                    //Debug.Log("Try do array instruction, original is " + original.name + " and type is " + type + " and field is " + field);
-                    FieldInfo fInfo = original.GetType().GetField(field);
-                    if (fInfo == null)
+                    object value = original.GetType().GetField(field).GetValue(original);
+                    if (value == null)
                     {
-                        Debug.LogError("info was null on object " + original + " while trying to find field " + field + " of type " + type);
-                        return;
+                        value = original.GetType().GetField(field).FieldType.GetConstructors()[0].Invoke(new object[] { 1 });
                     }
-                    Array newArray = ResizeArray((Array)fInfo.GetValue(original), subInstructions.Count);
-                    for (int i = 0; i < subInstructions.Count; i++)
-                        newArray.SetValue(subInstructions[i].GetArrayValue(allTransforms), i);
-                    original.GetType().GetField(field).SetValue(original, newArray);
-                }
-                else if (instruction == InstructionType.qsComponent)
-                {
-                    //Debug.Log("Running qsComponent instruction.");
-                    List<VTOLQuickStart.QuickStartComponents.QSEngine> qsEngines = new List<VTOLQuickStart.QuickStartComponents.QSEngine>();
-                    Debug.Log("new list.");
-                    //EngineEffects.EngineAudioFX originalSound = ((VTOLQuickStart)original).quickStartComponents.engines[0].engine.engineEffects.audioEffects[0];
-                    Debug.Log("original sound.");
-                    foreach (Instruction instruction in subInstructions)
+                    if (value is Array)
                     {
-                        VTOLQuickStart.QuickStartComponents.QSEngine qsEngine = (VTOLQuickStart.QuickStartComponents.QSEngine)instruction.GetArrayValue(allTransforms);
-                        Debug.Log("adding new qsEngine, null is " + qsEngine == null);
-                        qsEngines.Add(qsEngine);
-                        Debug.Log("Continuing");
-                        //if (originalSound != null && qsEngine.engine.engineEffects.audioEffects == null || qsEngine.engine.engineEffects.audioEffects.Length == 0)
-                        //{
-                        //    Debug.Log("new");
-                        //    EngineEffects.EngineAudioFX newSound = new EngineEffects.EngineAudioFX();
-                        //    Debug.Log("volume");
-                        //    newSound.volumeCurve = originalSound.volumeCurve;
-                        //    Debug.Log("pitch");
-                        //    newSound.pitchCurve = originalSound.pitchCurve;
-                        //    Debug.Log("audoi");
-                        //    newSound.audioSource = GameObject.Instantiate(originalSound.audioSource.gameObject, qsEngine.engine.thrustTransform).GetComponent<AudioSource>();
-                        //    Debug.Log("moar aduoi");
-                        //    newSound.audioSource.transform.localPosition = Vector3.zero;
-                        //    Debug.Log("qsengine");
-                        //    qsEngine.engine.engineEffects.audioEffects = new EngineEffects.EngineAudioFX[] { newSound };
-                        //    Debug.Log("goodie");
-                        //}
-                        Debug.Log("doan");
+                        Debug.Log("try do array of field " + field + " and type " + type);
+                        Array newArray = ResizeArray((Array)value, subInstructions.Count);
+                        for (int i = 0; i < subInstructions.Count; i++)
+                            newArray.SetValue(subInstructions[i].GetArrayValue(allTransforms), i);
+                        original.GetType().GetField(field).SetValue(original, newArray);
                     }
-                    if (type == "quickStartComponents")
-                        ((VTOLQuickStart)original).quickStartComponents.engines = qsEngines.ToArray();
-                    else if (type == "quickStopComponents")
-                        ((VTOLQuickStart)original).quickStopComponents.engines = qsEngines.ToArray();
+                    else
+                    {
+                        Debug.Log("Doing IList for type " + type + " of field " + field + " and count is: " + subInstructions.Count);
+                        IList list = (IList)value;
+                        try
+                        {
+                            list.Clear();
+                        }
+                        catch (NullReferenceException e)
+                        {
+                            Debug.LogError("Couldn't get list");
+                            return;
+                        }
+                        for (int i = 0; i < subInstructions.Count; i++)
+                        {
+                            list.Add(subInstructions[i].GetArrayValue(allTransforms));
+                        }
+                        original.GetType().GetField(field).SetValue(original, list);
+                    }
                 }
                 else if (instruction == InstructionType.newObject)
                 {
@@ -517,7 +526,18 @@ public class SimpleCustomPlane : MonoBehaviour
                         else
                             ctorObj.Add(null);
                     }
-                    newObject = Type.GetType(type).GetConstructor(ctorTypes.ToArray()).Invoke(ctorObj.ToArray());
+                    Type anotherType = Type.GetType(type);
+                    if (!anotherType.IsValueType)
+                    {
+                        try
+                        {
+                            newObject = Type.GetType(type).GetConstructor(ctorTypes.ToArray()).Invoke(ctorObj.ToArray());
+                        }
+                        catch (Exception e)
+                        {
+                            Debug.Log("The ctor nulled but idgaf.");
+                        }
+                    }
                     foreach (Instruction instruction in subInstructions)
                     {
                         //Debug.Log("Running instruction " + instruction.instruction + " of indentation " + instruction.indentation + " of field " + instruction.field + " of type " + instruction.type + " of value " + instruction.value);
@@ -530,10 +550,27 @@ public class SimpleCustomPlane : MonoBehaviour
             {
                 if (instruction == InstructionType.pointer)
                 {
+                    if (Type.GetType(type) == null)
+                    {
+                        string temp = type;
+                        type = value;
+                        value = temp;
+                        //Debug.Log("Switched type and value, type is " + type + " and value is " + value);
+                    }
+                    if (value.Trim() == "null")
+                        return null;
+                    try
+                    {
+                        bool test = allTransforms[value.Trim()] == null;
+                    }
+                    catch (KeyNotFoundException e)
+                    {
+                        Debug.LogError("Couldn't find transform for sub pointer instruction " + value.Trim());
+                    }
                     //Debug.Log("Try do pointer sub instruction, value is " + value + " and type is " + type + " and field is " + field);
                     if (type.Contains("GameObject"))
                     {
-                        Debug.Log("Type contained GameObject");
+                        //Debug.Log("Type contained GameObject");
                         return allTransforms[value.Trim()].gameObject;
                     }
                     Type newType = Type.GetType(type.Trim());
@@ -552,7 +589,7 @@ public class SimpleCustomPlane : MonoBehaviour
                         case "String":
                             return value;
                         case "Boolean":
-                            Debug.Log("Setting bool for " + field + " and value " + value);
+                            //Debug.Log("Setting bool for " + field + " and value " + value + " original " + original.GetType());
                             return value.Trim() == "True";
                         case "Single":
                             //Debug.Log("Setting float for " + field + " and value " + value);
@@ -565,20 +602,9 @@ public class SimpleCustomPlane : MonoBehaviour
                             return null;
                     }
                 }
-                else if (instruction == InstructionType.events) // enums can be whatever the fuck i want :P
+                else if (instruction == InstructionType.events)
                 {
-                    // array code for weird classes at some point :(
-                }
-                else if (instruction == InstructionType.qsComponent)
-                {
-                    //Debug.Log("Returning array value for qsComponent");
-                    VTOLQuickStart.QuickStartComponents.QSEngine qsEngine = new VTOLQuickStart.QuickStartComponents.QSEngine();
-                    //Debug.Log("try get engine");
-                    qsEngine.engine = allTransforms[value.Trim()].GetComponent<ModuleEngine>();
-                    //Debug.Log("try set state");
-                    qsEngine.state = int.Parse(type.Trim());
-                    //Debug.Log("returning qsComponent");
-                    return qsEngine;
+                    // event code at some point :( 
                 }
                 else if (instruction == InstructionType.newObject)
                 {
@@ -596,11 +622,14 @@ public class SimpleCustomPlane : MonoBehaviour
                         else
                             ctorObj.Add(null);
                     }
-                    newObject = Type.GetType(type).GetConstructor(ctorTypes.ToArray()).Invoke(ctorObj.ToArray());
-                    foreach (Instruction instruction in subInstructions)
-                    {
-                        instruction.Run(newObject, allTransforms);
-                    }
+                    Debug.Log("newObject type is " + type + " and field is " + field);
+                    if (!Type.GetType(type).IsValueType)
+                        newObject = Type.GetType(type).GetConstructor(ctorTypes.ToArray()).Invoke(ctorObj.ToArray());
+                    if (subInstructions != null && subInstructions.Count > 0) // this should never be null, so i'm very confused
+                        foreach (Instruction instruction in subInstructions)
+                        {
+                            instruction.Run(newObject, allTransforms);
+                        }
                     return newObject;
                 }
                 Debug.LogWarning("Couldn't resolve type for sub array.");
@@ -621,8 +650,7 @@ public class SimpleCustomPlane : MonoBehaviour
                 pointer = 2,
                 events = 4,
                 array = 8,
-                qsComponent = 16,
-                newObject
+                newObject = 16
             }
         }
     }

@@ -33,7 +33,6 @@ public class Armory
             Debug.Log("got a source");
             source.outputAudioMixerGroup = VTResources.GetExteriorMixerGroup();
         }
-        Debug.Log("launcher");
         HPEquipMissileLauncher launcher = weaponObject.GetComponent<HPEquipMissileLauncher>();
         if (launcher) // I know this solution isn't optimized in the slightest, but meh
         {

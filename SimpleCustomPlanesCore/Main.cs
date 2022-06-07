@@ -30,6 +30,12 @@ public class Main : VTOLMOD
                 selectedPlane = null;
         };
 
+        PilotSelectUI ui = Resources.FindObjectsOfTypeAll<PilotSelectUI>().FirstOrDefault(); // this should be fine cuz there's not many objects here
+        GameObject template = GameObject.Instantiate(ui.createPilotDisplayObject, ui.createPilotDisplayObject.transform.parent).AddComponent<LoadingTemplate>().gameObject;
+        template.SetActive(true); // we're tryna call awake() here
+        template.SetActive(false);
+        base.ModLoaded();
+
         // I stole this code from csa lmao
         Debug.Log("Searching for .plane files in the mod folder");
         string address = Directory.GetCurrentDirectory();
@@ -50,10 +56,6 @@ public class Main : VTOLMOD
         {
             Debug.Log(address + " doesn't exist.");
         }
-
-        PilotSelectUI ui = Resources.FindObjectsOfTypeAll<PilotSelectUI>().FirstOrDefault(); // this should be fine cuz there's not many objects here
-        GameObject.Instantiate(ui.selectPilotDisplayObject, ui.selectPilotDisplayObject.transform.parent).AddComponent<LoadingTemplate>().gameObject.SetActive(false);
-        base.ModLoaded();
     }
 
     private IEnumerator asyncLoad(string directory, string bundleName)
@@ -84,14 +86,23 @@ public class LoadingTemplate : MonoBehaviour
     public void Awake()
     {
         instance = this;
+        Debug.Log("This is a new instance");
         pui = GetComponentInParent<PilotSelectUI>();
+        Debug.Log("got pui");
         transform.Find("nameBorder").gameObject.SetActive(false);
+        Debug.Log("got nameborder");
         transform.Find("NameText").gameObject.SetActive(false);
-        transform.Find("EditName").gameObject.SetActive(false);
+        Debug.Log("got nametext");
+        transform.Find("EditNameButton").gameObject.SetActive(false);
+        Debug.Log("got editname");
         transform.Find("StartButton").gameObject.SetActive(false);
-        transform.Find("Lable (1)").gameObject.GetComponent<Text>().text = "Loading Vehicles";
+        Debug.Log("got startbutton");
+        transform.Find("Label (1)").gameObject.GetComponent<Text>().text = "Loading Vehicles";
+        Debug.Log("got label (1)");
         textTemplate = transform.Find("Label").gameObject;
+        Debug.Log("got label");
         textTemplate.SetActive(false);
+        Debug.Log("disabled label");
     }
 
     public void Open()
@@ -120,6 +131,7 @@ public class LoadingTemplate : MonoBehaviour
         {
             hasVehicle = false;
             pui.StartSelectedPilotButton();
+            gameObject.SetActive(false);
             return;
         }
         for (int i = 0; i < currIdx; i++)
@@ -133,7 +145,7 @@ public class Ensure_VehiclesLoaded
 {
     public static bool Prefix()
     {
-        if (LoadingTemplate.instance.hasVehicle)
+        if (LoadingTemplate.instance != null && LoadingTemplate.instance.hasVehicle)
         {
             LoadingTemplate.instance.Open();
             return false;

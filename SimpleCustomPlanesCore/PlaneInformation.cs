@@ -27,14 +27,14 @@ public class PlaneInformation
         }
         manifestDataModel info = JsonConvert.DeserializeObject<manifestDataModel>(manifest.text);
 
-        if (info.dependencyName != null && File.Exists(scpPath + "/" + info.dependencyName + ".dll"))
+        if (info.dependencyName != null && File.Exists(scpPath + "\\" + info.dependencyName))
         {
-            Debug.Log("Trying to load dependency for " + info.playerVehicle + " at " + scpPath + "/" + info.dependencyName);
-            byte[] dllBytes = File.ReadAllBytes(scpPath + "/" + info.dependencyName);
+            Debug.Log("Trying to load dependency for " + info.playerVehicle + " at " + scpPath + "\\" + info.dependencyName);
+            byte[] dllBytes = File.ReadAllBytes(scpPath + "\\" + info.dependencyName);
             Assembly.Load(dllBytes);
         }
         else
-            Debug.Log("No depenency found for this plane at " + scpPath + "/" + ((info.dependencyName == null) ? info.dependencyName : ""));
+            Debug.Log("No depenency found for this plane at " + scpPath + "\\" + ((info.dependencyName == null) ? info.dependencyName : ""));
 
         playerVehicle = bundle.LoadAsset(info.playerVehicle + ".asset") as PlayerVehicle;
         if (manifest == null)

@@ -22,7 +22,9 @@ public class PlaneBaseIdentifier : MonoBehaviour
         foreach (Transform tf in GetComponentsInChildren<Transform>(true))
         {
             if (!Initialized)
+            {
                 allTfs.Add(HashTransform(tf, allNames), transform);
+            }
             else
             {
                 allNames.Add(transform.name);
@@ -35,11 +37,11 @@ public class PlaneBaseIdentifier : MonoBehaviour
         {
             foreach (Transform child in tf)
             {
-                //if (child.name == "seatAdjustTf-1659611427" || child.name == "touchScreenArea1907453234")
-                //{
-                //    Debug.Log("Skipping blacklisted child");
-                //    continue;
-                //}
+                if (child.name == "EjectorSeat-1135239333")
+                {
+                    //Debug.Log("Skipping blacklisted child");
+                    continue;
+                }
                 allObjects.Add(new ObjectInformation(child.gameObject));
                 RecursiveGetTf(child);
             }
@@ -48,7 +50,34 @@ public class PlaneBaseIdentifier : MonoBehaviour
         allObjects.Add(new ObjectInformation(transform.gameObject));
         RecursiveGetTf(transform);
 
+        bool shouldDump = !Initialized;
         Initialized = true;
+
+        if (shouldDump)
+        {
+            if (!Directory.Exists(pathToDump + "/SCPInformation/"))
+                Directory.CreateDirectory(pathToDump + "/SCPInformation/");
+            List<string> toDump = new List<string>();
+            foreach (ObjectInformation info in allObjects)
+            {
+                if (info == null)
+                    Debug.Log("Null object?");
+                toDump.Add(info.GetDumpLine());
+                //Debug.Log("Added " + info.originalObject.name + " to be dumped.");
+            }
+            Debug.Log("Dumping initial file.");
+            using (StreamWriter writer = new StreamWriter(pathToDump + "/SCPInformation/intialDump" + nickname + ".scpart", false, Encoding.Default, 4096))
+            {
+                foreach (string line in toDump)
+                {
+                    writer.WriteLine(line);
+                    //Debug.Log("Dumped " + line);
+                    writer.Flush();
+                }
+            }
+        }
+
+
     }
 
     private string HashTransform(Transform transform, List<string> allNames)
@@ -90,8 +119,9 @@ public class PlaneBaseIdentifier : MonoBehaviour
             toDump.Add(info.GetDumpLine());
             //Debug.Log("Added " + info.originalObject.name + " to be dumped.");
         }
-        Debug.Log("Dumping file.");
-        using (StreamWriter writer = new StreamWriter(pathToDump + nickname + ".SCP", false, Encoding.Default, 4096))
+
+        Debug.Log("Dumping second file to dif.");
+        using (StreamWriter writer = new StreamWriter(pathToDump + "/SCPInformation/intialDump" + nickname + ".temp", false, Encoding.Default, 4096))
         {
             foreach (string line in toDump)
             {
@@ -100,6 +130,83 @@ public class PlaneBaseIdentifier : MonoBehaviour
                 writer.Flush();
             }
         }
+
+
+
+        Dictionary<string, Dictionary<string, List<SCPTextReader.Instruction>>> initialDump = SCPTextReader.GetLinesFromFile(pathToDump + "/SCPInformation/intialDump" + nickname + ".scpart");
+        Dictionary<string, Dictionary<string, List<SCPTextReader.Instruction>>> tempDump = SCPTextReader.GetLinesFromFile(pathToDump + "/SCPInformation/intialDump" + nickname + ".temp");
+
+        Dictionary<string, Dictionary<string, List<SCPTextReader.Instruction>>> dictToDump = new Dictionary<string, Dictionary<string, List<SCPTextReader.Instruction>>>();
+
+        foreach (string key in initialDump.Keys)
+        {
+            Dictionary<string, List<SCPTextReader.Instruction>> currentDict = new Dictionary<string, List<SCPTextReader.Instruction>>();
+            if (!tempDump.ContainsKey(key))
+            {
+                string hashedName = NextElement(key, 0);
+                foreach (string toFind in tempDump.Keys)
+                {
+                    if (NextElement(toFind, 0) == hashedName)
+                    {
+                        dictToDump.Add(toFind, currentDict);
+                        foreach (string component in tempDump[toFind].Keys)
+                        {
+                            List<SCPTextReader.Instruction> currentList = new List<SCPTextReader.Instruction>();
+                            for (int i = 0; i < tempDump[toFind][component].Count; i++)
+                            {
+                                if (initialDump[key][component][i] != tempDump[toFind][component][i] && (tempDump[toFind][component][i].instruction != SCPTextReader.Instruction.InstructionType.ignore))
+                                    currentList.Add(tempDump[toFind][component][i]);
+                            }
+                            if (currentList.Count > 0)
+                            {
+                                currentDict.Add(component, currentList);
+                            }
+                        }
+                    }
+                }
+            }
+            else
+            {
+                foreach (string component in tempDump[key].Keys)
+                {
+                    List<SCPTextReader.Instruction> currentList = new List<SCPTextReader.Instruction>();
+                    for (int i = 0; i < tempDump[key][component].Count; i++)
+                    {
+                        if (initialDump[key][component][i] != tempDump[key][component][i] && (tempDump[key][component][i].instruction != SCPTextReader.Instruction.InstructionType.ignore))
+                            currentList.Add(tempDump[key][component][i]);
+                    }
+                    if (currentList.Count > 0)
+                    {
+                        if (!dictToDump.ContainsKey(key))
+                            dictToDump.Add(key, currentDict);
+                        currentDict.Add(component, currentList);
+                    }
+                }
+            }
+        }
+
+        Debug.Log("Dumping file.");
+        using (StreamWriter writer = new StreamWriter(pathToDump + nickname + ".SCP", false, Encoding.Default, 4096))
+        {
+            foreach (string line in dictToDump.Keys)
+            {
+                writer.WriteLine(line);
+                writer.Flush();
+                foreach (string component in dictToDump[line].Keys)
+                {
+                    writer.WriteLine(component);
+                    writer.Flush();
+                    foreach (SCPTextReader.Instruction instruction in dictToDump[line][component])
+                    {
+                        if (instruction.instruction == SCPTextReader.Instruction.InstructionType.ignore)
+                            continue;
+                        writer.WriteLine(instruction.GetDumpLine("        "));
+                        writer.Flush();
+                    }
+                }
+            }
+        }
+
         PlayerVehicle newVehicle = PlayerVehicle.CreateInstance<PlayerVehicle>();
         newVehicle.vehicleName = vehicleName;
         newVehicle.description = description;
@@ -279,10 +386,7 @@ public class PlaneBaseIdentifier : MonoBehaviour
                 //    Debug.Log("dict    " + type.AssemblyQualifiedName + " has a length of " + instructions.Count + " on " + currentTf.name);
                 foreach (SCPTextReader.Instruction instruction in instructions)
                 {
-                    if (instruction == null)
-                        Debug.LogError("How the fuck was an instruction null?");
-                    else
-                        instruction.Run(currentComponent, allTfs, false);
+                    instruction.Run(currentComponent, allTfs, false);
                 }
             }
         }
@@ -429,6 +533,13 @@ public class PlaneBaseIdentifier : MonoBehaviour
         public Dictionary<Component, Type> componentsByType = new Dictionary<Component, Type>();
         //private int initialDumpHash;
 
+        public bool Equals(ObjectInformation obj)
+        {
+            if (this == null ^ obj.Equals(null))
+                return false;
+            return (this == null && obj == null) || this.originalObject == obj.originalObject;
+        }
+
         public ObjectInformation(GameObject go)
         {
             //if (verboseLogs)
@@ -479,7 +590,7 @@ public class PlaneBaseIdentifier : MonoBehaviour
             string result = "";
             foreach (Component component in allComponents)
             {
-                if (component is PlaneBaseIdentifier)
+                if (component is PlaneBaseIdentifier || component is PerVRDeviceLocalPosition || component is VTSteamVRController || component is VRHandController || component is RiftTouchController || component is Valve.VR.SteamVR_Behaviour_Pose || component is GloveAnimation || component is LookRotationReference || component is IKTwo || component is VRSDKSwitcher)
                     continue;
                 if (component == null)
                 {
@@ -499,72 +610,83 @@ public class PlaneBaseIdentifier : MonoBehaviour
                     string componentStr = "\n    " + componentsByType[component].AssemblyQualifiedName;
                     foreach (FieldInfo prop in fInfo)
                     {
-                        try
+                        object value = prop.GetValue(component);
+                        //if (value == null)
+                        //    continue;
+                        //Debug.Log(trueType.Name + " on " + component.gameObject.name + " found prop: " + prop.Name + ": " + value + " of type " + value.GetType().Name);
+                        if (value != null && (value is Array || value is IList))
                         {
-                            object value = prop.GetValue(component);
-                            //if (value == null)
-                            //    continue;
-                            //Debug.Log(trueType.Name + " on " + component.gameObject.name + " found prop: " + prop.Name + ": " + value + " of type " + value.GetType().Name);
-                            if (value != null && value is Array)
+                            Array newArr = null;
+                            Type type;
+                            if (value is Array)
                             {
-                                Array newArr = (Array)value;
-                                string arrayStr = "\n        array [{(" + newArr.GetValue(0).GetType().AssemblyQualifiedName + ")}] [{(" + prop.Name + ")}] " + newArr.Length;
-                                bool addArray = false;
-                                if (newArr.Length > 0)
+                                newArr = (Array)value;
+                                type = newArr.GetType().GetElementType();
+                            }
+                            else
+                            {
+                                newArr = new object[((IList)value).Count];
+                                int i = 0;
+                                foreach (object obj in (IList)value)
                                 {
-                                    if (newArr is Component[])
-                                    {
-                                        //Debug.Log("Got a component[]");
-                                        for (int i = 0; i < newArr.Length; i++)
-                                        {
-                                            Component arrValue = ((Component)newArr.GetValue(i));
-                                            arrayStr += "\n            pointer " + i + " [{(" + arrValue.GetType().AssemblyQualifiedName + ")}] [{(" + arrValue.name + ")}]";
-                                            addArray = true;
-                                        }
-                                    }
-                                    else
-                                    {
-                                        Type type = newArr.GetValue(0).GetType();
-                                        if (type.Name == "String" || type.Name == "Int32" || type.Name == "Single" || type.Name == "Boolean")
-                                        {
-                                            //Debug.Log("Got a primitive[]");
-                                            for (int i = 0; i < newArr.Length; i++)
-                                            {
-                                                arrayStr += "\n            assign " + i + " [{(" + type.Name + ")}] [{(" + newArr.GetValue(i) + ")}]";
-                                                addArray = true;
-                                            }
-                                        }
-                                        else if (newArr is GameObject[]) // i don't know why i have to do this, should be literally a component
-                                        {
-                                            //Debug.Log("Got a gameObject[]");
-                                            for (int i = 0; i < newArr.Length; i++)
-                                            {
-                                                arrayStr += "\n            pointer " + i + " [{(" + typeof(GameObject).AssemblyQualifiedName + ")}] [{(" + ((GameObject)newArr.GetValue(i)).name + ")}]";
-                                                addArray = true;
-                                            }
-                                        }
-                                        else
-                                        {
-                                            //Debug.Log("Got a weird[]");
-                                            for (int i = 0; i < newArr.Length; i++)
-                                            {
-                                                object element = newArr.GetValue(i);
-                                                arrayStr += "\n                " + convertField(i.ToString(), element, element.GetType().AssemblyQualifiedName, "        ");
-                                                addArray = true;
-                                            }
-                                        }
-                                    }
-                                    if (addArray)
-                                        componentStr += arrayStr;
+                                    newArr.SetValue(obj, i);
+                                    i++;
+                                }
+                                string badName = ((IList)value).GetType().AssemblyQualifiedName;
+                                string newName = badName.Replace("[[", "[{("); // this is an amazing solution and not hacky
+                                newName = newName.Replace("]]", ")}]");
+                                type = Type.GetType(NextElement(newName, 0));
+                            }
+                            string arrayStr = "\n        array [{(" + type.AssemblyQualifiedName + ")}] [{(" + prop.Name + ")}] " + newArr.Length;
+                            if (newArr is Component[])
+                            {
+                                for (int i = 0; i < newArr.Length; i++)
+                                {
+                                    Component arrValue = ((Component)newArr.GetValue(i));
+                                    arrayStr += "\n            pointer " + i + " [{(" + type.AssemblyQualifiedName + ")}] [{(" + arrValue.name + ")}]";
                                 }
                             }
                             else
-                                componentStr += "\n        " + convertField(prop.Name, value, prop.FieldType.AssemblyQualifiedName);
+                            {
+                                if (type.Name == "String" || type.Name == "Int32" || type.Name == "Single" || type.Name == "Boolean")
+                                {
+                                    //Debug.Log("Got a primitive[]");
+                                    for (int i = 0; i < newArr.Length; i++)
+                                    {
+                                        arrayStr += "\n            assign " + i + " [{(" + type.Name + ")}] [{(" + newArr.GetValue(i) + ")}]";
+                                    }
+                                }
+                                else if (newArr is GameObject[]) // i don't know why i have to do this, should be literally a component
+                                {
+                                    //if (value is IList)
+                                    //Debug.Log("Got a gameObject[] on " + prop.Name);
+                                    for (int i = 0; i < newArr.Length; i++)
+                                    {
+                                        //if (value is IList)
+                                        //Debug.Log("Writing " + ((GameObject)newArr.GetValue(i)).name);
+                                        arrayStr += "\n            pointer " + i + " [{(" + typeof(GameObject).AssemblyQualifiedName + ")}] [{(" + ((GameObject)newArr.GetValue(i)).name + ")}]";
+                                    }
+                                }
+                                else
+                                {
+                                    //Debug.Log("Got a weird[]");
+                                    string typeName = type.AssemblyQualifiedName;
+                                    if ((typeName.Contains("PlayerVehicle") && !typeName.Contains("PlayerVehicleSetup")) || Type.GetType(typeName).IsAssignableFrom(typeof(PerVRDeviceLocalPosition)) || typeName.Contains("SteamId") || typeName.Contains("Friend") || Type.GetType(typeName).IsSubclassOf(typeof(ScriptableObject)) || typeName.Contains("AnimationCurve"))
+                                    {
+                                        componentStr += "\n ignore " + prop.Name;
+                                        continue;
+                                    }
+                                    for (int i = 0; i < newArr.Length; i++)
+                                    {
+                                        object element = newArr.GetValue(i);
+                                        arrayStr += "\n            " + convertField(i.ToString(), element, type.AssemblyQualifiedName, "    ");
+                                    }
+                                }
+                            }
+                            componentStr += arrayStr;
                         }
-                        catch (Exception e)
-                        {
-                            Debug.LogWarning("caught exception, " + e.StackTrace);
-                        }
+                        else
+                            componentStr += "\n        " + convertField(prop.Name, value, prop.FieldType.AssemblyQualifiedName);
                     }
                     componentStr += "\n    END";
                     result += componentStr;
@@ -580,14 +702,58 @@ public class PlaneBaseIdentifier : MonoBehaviour
             if (fieldType.IsSubclassOf(typeof(Component)))
             {
                 if (field != null)
-                    result = "pointer " + fieldName + " [{(" + ((Component)field).name + ")}] [{(" + typeName + " )}]";
+                {
+                    try
+                    {
+                        result = "pointer " + fieldName + " [{(" + ((Component)field).name + ")}] [{(" + typeName + " )}]";
+                    }
+                    catch (UnassignedReferenceException e)
+                    {
+                        result = "pointer " + fieldName + " [{(null)}] [{(" + typeName + " )}]";
+                    }
+                    catch (NullReferenceException e)
+                    {
+                        result = "pointer " + fieldName + " [{(null)}] [{(" + typeName + " )}]";
+                    }
+                    catch (MissingReferenceException)
+                    {
+                        result = "ignore " + fieldName;
+                    }
+                }
                 else
                 {
                     //Debug.Log("Writing null");
                     result = "pointer " + fieldName + " [{(null)}] [{(" + typeName + " )}]";
                 }
             }
-            else if (fieldType.IsSubclassOf(typeof(Animator)))
+            else if (field is GameObject)
+            {
+                if (field != null)
+                {
+                    try
+                    {
+                        result = "pointer " + fieldName + " [{(" + ((GameObject)field).name + ")}] [{(" + typeName + " )}]";
+                    }
+                    catch (UnassignedReferenceException e)
+                    {
+                        result = "pointer " + fieldName + " [{(null)}] [{(" + typeName + " )}]";
+                    }
+                    catch (NullReferenceException e)
+                    {
+                        result = "pointer " + fieldName + " [{(null)}] [{(" + typeName + " )}]";
+                    }
+                    catch (MissingReferenceException)
+                    {
+                        result = "ignore " + fieldName;
+                    }
+                }
+                else
+                {
+                    //Debug.Log("Writing null");
+                    result = "pointer " + fieldName + " [{(null)}] [{(" + typeName + " )}]";
+                }
+            }
+            else if (field is Animator)
             {
                 if (field != null)
                     result = "pointer " + fieldName + " [{(" + ((Animator)field).name + ")}] [{(" + typeName + " )}]";
@@ -623,85 +789,119 @@ public class PlaneBaseIdentifier : MonoBehaviour
                         field = (int)field;
                     result = "assign " + fieldName + " [{(" + fieldType.Name + ")}] [{(" + field.ToString().Replace("\n", "\\n") + ")}]";
                 }
-                //else if (field is VTOLQuickStart.QuickStartComponents) // this is a very shit implementation
-                //{
-                //    //Debug.Log("Got quickstart components");
-                //    result = "qsComponents " + fieldName;
-                //    foreach (VTOLQuickStart.QuickStartComponents.QSEngine qsEngine in ((VTOLQuickStart.QuickStartComponents)field).engines)
-                //    {
-                //        result += "\n            qsEngine[{(" + qsEngine.engine.name + ")}] [{(" + qsEngine.state + ")}]";
-                //    }
-                //}
                 else
                 {
                     result = "ignore " + fieldName;
                     Type newType = Type.GetType(typeName);
                     FieldInfo[] fInfo = newType.GetFields(BindingFlags.Public | BindingFlags.Instance);
-                    if (field is Array)
+                    if ((field is Array || field is IList))
                     {
-                        result = "array [{(" + typeName + ")}] " + fieldName + "\n";
-                        Array newArr = (Array)field;
+                        Array newArr;
+                        if (field is Array)
+                        {
+                            newArr = (Array)field;
+                            result = "array [{(" + field.GetType().GetElementType().AssemblyQualifiedName + ")}] [{(" + fieldName + ")}]";
+                        }
+                        else
+                        {
+                            newArr = new object[((IList)field).Count];
+                            int i = 0;
+                            Type listType = null;
+                            foreach (object obj in (IList)field)
+                            {
+                                if (listType == null)
+                                    listType = obj.GetType();
+                                newArr.SetValue(obj, i);
+                                i++;
+                            }
+                            string badName = ((IList)field).GetType().AssemblyQualifiedName;
+                            //Debug.Log("Badname is " + badName);
+                            string newName = badName.Replace("[[", "[{("); // this is an amazing solution and not hacky
+                            newName = newName.Replace("]]", ")}]");
+                            //Debug.Log("newName is " + newName);
+                            //Debug.Log("Typename is " + NextElement(newName, 0));
+                            result = "array [{(" + NextElement(newName, 0) + ")}] [{(" + fieldName + ")}]";
+                        }
                         string arrayStr = ""/*"\n        array [{(" + newArr.GetValue(0).GetType().AssemblyQualifiedName + ")}] [{(" + prop.Name + ")}] " + newArr.Length*/;
                         bool addArray = false;
-                        if (newArr.Length > 0)
+                        if (newArr is Component[])
                         {
-                            if (newArr is Component[])
+                            //Debug.Log("Got a component[] on " + result);
+                            for (int i = 0; i < newArr.Length; i++)
                             {
-                                //Debug.Log("Got a component[]");
+                                Component arrValue = ((Component)newArr.GetValue(i));
+                                arrayStr += "\n            pointer " + i + " [{(" + arrValue.name + ")}] [{(" + arrValue.GetType().AssemblyQualifiedName + ")}]";
+                                addArray = true;
+                            }
+                        }
+                        else
+                        {
+                            Type type = newArr.GetType().GetElementType();
+                            if (type.Name == "String" || type.Name == "Int32" || type.Name == "Single" || type.Name == "Boolean")
+                            {
+                                //Debug.Log("Got a primitive[]");
                                 for (int i = 0; i < newArr.Length; i++)
                                 {
-                                    Component arrValue = ((Component)newArr.GetValue(i));
-                                    arrayStr += "\n            pointer " + i + " [{(" + arrValue.name + ")}] [{(" + arrValue.GetType().AssemblyQualifiedName + ")}]";
+                                    arrayStr += "\n            assign " + i + " [{(" + newArr.GetValue(i) + ")}] [{(" + type.Name + ")}]";
+                                    addArray = true;
+                                }
+                            }
+                            else if (newArr is GameObject[]) // i don't know why i have to do this, should be literally a component
+                            {
+                                for (int i = 0; i < newArr.Length; i++)
+                                {
+                                    GameObject arrValue = ((GameObject)newArr.GetValue(i));
+                                    arrayStr += "\n            " + newObjectIndent + "pointer " + i + " [{(" + arrValue.name + ")}] [{(" + typeof(GameObject).AssemblyQualifiedName + ")}]";
                                     addArray = true;
                                 }
                             }
                             else
                             {
-                                Type type = newArr.GetValue(0).GetType();
-                                if (type.Name == "String" || type.Name == "Int32" || type.Name == "Single" || type.Name == "Boolean")
+                                //Debug.Log("Got a weird[] on " + result);
+                                addArray = true;
+                                ConstructorInfo[] cInfos = Type.GetType(typeName).GetElementType().GetConstructors();
+                                List<string> allTypes = new List<string>();
+                                if (cInfos.Length > 0)
                                 {
-                                    //Debug.Log("Got a primitive[]");
-                                    for (int i = 0; i < newArr.Length; i++)
+                                    foreach (ParameterInfo pInfo in cInfos[0].GetParameters())
                                     {
-                                        arrayStr += "\n            assign " + i + " [{(" + newArr.GetValue(i) + ")}] [{(" + type.Name + ")}]";
-                                        addArray = true;
+                                        Debug.Log("adding " + pInfo.ParameterType.AssemblyQualifiedName + " to " + typeName);
+                                        allTypes.Add(pInfo.ParameterType.AssemblyQualifiedName);
                                     }
                                 }
-                                else if (newArr is GameObject[]) // i don't know why i have to do this, should be literally a component
+                                for (int i = 0; i < newArr.Length; i++)
                                 {
-                                    //Debug.Log("Got a gameObject[]");
-                                    for (int i = 0; i < newArr.Length; i++)
+                                    object element = newArr.GetValue(i);
+                                    arrayStr += "\n                newObject [{(" + i + ")}] [{(" + element.GetType().AssemblyQualifiedName + ")}] [{(" + allTypes.Count + ")}] [{(" + ConfigNodeUtils.WriteList(allTypes) + ")}]";
+                                    FieldInfo[] info = element.GetType().GetFields();
+                                    foreach (FieldInfo eInfo in info)
                                     {
-                                        arrayStr += "\n            pointer " + i + " [{(" + ((GameObject)newArr.GetValue(i)).name + ")}] [{(" + typeof(GameObject).AssemblyQualifiedName + ")}]";
-                                        addArray = true;
-                                    }
-                                }
-                                else
-                                {
-                                    //Debug.Log("Got a weird[]");
-                                    for (int i = 0; i < newArr.Length; i++)
-                                    {
-                                        object element = newArr.GetValue(i);
-                                        arrayStr += "\n            newObject " + i + " [{(" + element.GetType().AssemblyQualifiedName + ")}]";
-                                        FieldInfo[] info = element.GetType().GetFields();
-                                        foreach (FieldInfo eInfo in info)
-                                        {
-                                            arrayStr += "\n                " + convertField(eInfo.Name, eInfo.GetValue(element), eInfo.FieldType.Name);
-                                        }
+                                        arrayStr += "\n                " + newObjectIndent + convertField(eInfo.Name, eInfo.GetValue(element), eInfo.FieldType.AssemblyQualifiedName, newObjectIndent + "    ");
                                     }
                                 }
                             }
-                            if (addArray)
-                                result += arrayStr;
                         }
+                        if (addArray)
+                            result += arrayStr;
                     }
-                    else if (fInfo.Length != 0 && !fInfo.GetType().IsAssignableFrom(typeof(PlayerVehicle))) // yes this is necasary :P
+                    else if (fInfo.Length != 0)
                     {
-                        ConstructorInfo cInfo = Type.GetType(typeName).GetConstructors()[Type.GetType(typeName).GetConstructors().Length - 1];
+                        if (Type.GetType(typeName).IsValueType)
+                            return "ignore " + fieldName;
                         List<string> allTypes = new List<string>();
-                        foreach (ParameterInfo pInfo in cInfo.GetParameters())
-                            allTypes.Add(pInfo.ParameterType.AssemblyQualifiedName);
+                        if (Type.GetType(typeName).GetConstructors().Length > 0)
+                        {
+                            ConstructorInfo cInfo = Type.GetType(typeName).GetConstructors()[0];
+                            foreach (ParameterInfo pInfo in cInfo.GetParameters())
+                            {
+                                allTypes.Add(pInfo.ParameterType.AssemblyQualifiedName);
+                            }
+                        }
+                        if ((typeName.Contains("PlayerVehicle") && !typeName.Contains("PlayerVehicleSetup")) || Type.GetType(typeName).IsAssignableFrom(typeof(PerVRDeviceLocalPosition)) || typeName.Contains("SteamId") || typeName.Contains("Friend") || Type.GetType(typeName).IsSubclassOf(typeof(ScriptableObject)) || typeName.Contains("AnimationCurve"))
+                            return "ignore " + fieldName;
                         result = "newObject [{(" + fieldName + ")}] [{(" + typeName + " )}] [{(" + allTypes.Count + ")}] [{(" + ConfigNodeUtils.WriteList(allTypes) + ")}]";
+                        if (field == null)
+                            return result;
                         foreach (FieldInfo prop in fInfo)
                         {
                             result += "\n            " + newObjectIndent + convertField(prop.Name, prop.GetValue(field), prop.FieldType.AssemblyQualifiedName, newObjectIndent + "    ");
@@ -780,17 +980,21 @@ public class PlaneBaseIdentifier : MonoBehaviour
                     currentDict.Add(currentLine, currentList);
                     //Debug.Log("New dict: " + currentLine);
                 }
-                else if (currentLine.Substring(0, 12) == "            ")
+                else if (currentLine.Length > 11 && currentLine.Substring(0, 12) == "            ")
                 {
                     //Debug.Log("adding new sub instruction to instruction " + currentLine);
                     currentInstruction.AddInstruction(currentLine);
                 }
                 else
                 {
+                    if (currentLine.Trim().Length == 0)
+                        continue;
                     currentInstruction = new Instruction(currentLine);
                     currentList.Add(currentInstruction);
                 }
             }
+
+            reader.Close();
 
             return result;
         }
@@ -807,6 +1011,102 @@ public class PlaneBaseIdentifier : MonoBehaviour
 
             public InstructionType instruction;
 
+            public static bool operator ==(Instruction left, Instruction right)
+            {
+                if (left.field != right.field)
+                    throw new ArgumentException("Left instruction field was " + left.field + " and right instruction field was " + right.field);
+                return left.value == right.value;
+            }
+
+            public static bool operator !=(Instruction left, Instruction right)
+            {
+                if (left.instruction == InstructionType.ignore || right.instruction == InstructionType.ignore)
+                    return true;
+
+
+                if (left.instruction != right.instruction)
+                    throw new ArgumentException("Left instruction type was " + left.instruction + " and right instruction type was " + right.instruction);
+
+                if (left.instruction == InstructionType.array || left.instruction == InstructionType.newObject)
+                {
+                    if (left.GetDumpLine("") == right.GetDumpLine(""))
+                        return false;
+                    return true;
+                }
+
+                if (left.field != right.field)
+                    throw new ArgumentException("Left instruction field was " + left.field + " and right instruction field was " + right.field);
+                return left.value != right.value;
+            }
+
+            public override bool Equals(object obj)
+            {
+                return base.Equals(obj);
+            }
+
+            public override int GetHashCode()
+            {
+                return (field + type + value).GetHashCode();
+            }
+
+            public string GetDumpLine(string indentation)
+            {
+                string dumpLine = indentation;
+                switch (instruction)
+                {
+                    case InstructionType.assign:
+                        dumpLine += "assign " + field + " [{(" + type + ")}] [{(" + value + ")}]";
+                        break;
+                    case InstructionType.pointer:
+                        dumpLine += "pointer " + field + " [{(" + value + ")}] [{(" + type + ")}]";
+                        break;
+                    case InstructionType.newObject:
+                        dumpLine += "newObject [{(" + field + ")}] [{(" + type + " )}] [{(" + allTypes.Count + ")}] [{(" + ConfigNodeUtils.WriteList(allTypes) + ")}]";
+                        foreach (Instruction sub in subInstructions)
+                        {
+                            dumpLine += "\n" + sub.GetDumpLine("    " + indentation);
+                        }
+                        break;
+                    case InstructionType.array:
+                        dumpLine += "array [{(" + type + ")}] [{(" + field + ")}] " + subInstructions.Count;
+                        foreach (Instruction sub in subInstructions)
+                        {
+                            dumpLine += "\n" + sub.GetArrayLine("    " + indentation);
+                        }
+                        break;
+                }
+                return dumpLine;
+            }
+
+            public string GetArrayLine(string indentation)
+            {
+                string dumpLine = indentation;
+                switch (instruction)
+                {
+                    case InstructionType.assign:
+                        dumpLine += "assign " + field + " [{(" + type + ")}] [{(" + value + ")}]";
+                        break;
+                    case InstructionType.pointer:
+                        dumpLine += "pointer " + field + " [{(" + type + ")}] [{(" + value + ")}]";
+                        break;
+                    case InstructionType.newObject:
+                        dumpLine += "newObject [{(" + field + ")}] [{(" + type + " )}] [{(" + allTypes.Count + ")}] [{(" + ConfigNodeUtils.WriteList(allTypes) + ")}]";
+                        foreach (Instruction sub in subInstructions)
+                        {
+                            dumpLine += "\n" + sub.GetDumpLine("    " + indentation);
+                        }
+                        break;
+                    case InstructionType.array:
+                        dumpLine = "array [{(" + type + ")}] [{(" + field + ")}] " + subInstructions.Count;
+                        foreach (Instruction sub in subInstructions)
+                        {
+                            dumpLine += "\n" + sub.GetArrayLine("    " + indentation);
+                        }
+                        break;
+                }
+                return dumpLine;
+            }
+
             public void AddInstruction(string line)
             {
                 Instruction toAdd = new Instruction(line.Trim(), true);
@@ -814,11 +1114,13 @@ public class PlaneBaseIdentifier : MonoBehaviour
                     return;
                 if (line.Length >= indentation + 15 && line.Substring(0, indentation + 15) == string.Concat(Enumerable.Repeat(" ", indentation + 15)))
                 {
+                    Debug.Log("Adding to LastNewObject " + line);
                     lastNewObject.AddInstruction(line);
                     return;
                 }
-                else if (toAdd.instruction == InstructionType.newObject)
+                else if (toAdd.instruction == InstructionType.newObject || toAdd.instruction == InstructionType.array)
                 {
+                    Debug.Log("adding newobject with indentation of " + (4 + indentation) + " and line is " + line);
                     lastNewObject = toAdd;
                     lastNewObject.indentation = 4 + indentation;
                 }
@@ -834,17 +1136,23 @@ public class PlaneBaseIdentifier : MonoBehaviour
                     value = NextElement(newLine, 1);
                     field = newLine.Substring(7, newLine.Substring(7).IndexOf(" "));
                 }
+                else if (newLine[0] == 'a' && newLine[1] == 'r')
+                {
+                    instruction = InstructionType.array;
+                    type = NextElement(newLine, 0);
+                    if (Type.GetType(type) == null)
+                    {
+                        field = NextElement(newLine, 0);
+                        type = NextElement(newLine, 1);
+                    }
+                    else
+                        field = NextElement(newLine, 1);
+                }
                 else if (newLine[0] == 'p')
                 {
                     instruction = InstructionType.pointer;
                     newLine = newLine.Substring(8);
                     field = newLine.Substring(0, newLine.IndexOf(" "));
-                    type = NextElement(newLine, 0);
-                    value = NextElement(newLine, 1);
-                }
-                else if (newLine[0] == 'q')
-                {
-                    instruction = InstructionType.qsComponent;
                     type = NextElement(newLine, 0);
                     value = NextElement(newLine, 1);
                 }
@@ -895,12 +1203,6 @@ public class PlaneBaseIdentifier : MonoBehaviour
                     instruction = InstructionType.array;
                     type = NextElement(newLine, 0);
                     field = NextElement(newLine, 1);
-                    indentation = 4;
-                }
-                else if (newLine[0] == 'q')
-                {
-                    instruction = InstructionType.qsComponent;
-                    type = newLine.Substring(newLine.IndexOf(" ") + 1).Trim();
                 }
                 else if (newLine[0] == 'n')
                 {
@@ -917,6 +1219,11 @@ public class PlaneBaseIdentifier : MonoBehaviour
             public void Run(object original, Dictionary<string, Transform> allTransforms, bool log)
             {
                 //Debug.Log("Running " + instruction + " " + UnityEngine.Random.Range(0, 999999));
+                if (original == null)
+                {
+                    Debug.LogWarning("Original is null");
+                    return;
+                }
                 if (instruction == InstructionType.assign)
                 {
                     if (log)
@@ -940,8 +1247,6 @@ public class PlaneBaseIdentifier : MonoBehaviour
                         case "Single":
                             if (log)
                                 Debug.Log("Setting float for " + field + " and value " + value + " and original type is " + original.GetType().Name);
-                            if (original == null)
-                                Debug.LogError("Original is null");
                             original.GetType().GetField(field).SetValue(original, float.Parse(value));
                             break;
                         case "Int32":
@@ -1030,23 +1335,47 @@ public class PlaneBaseIdentifier : MonoBehaviour
                 else if (instruction == InstructionType.array)
                 {
                     // This one was fun :) no it wasn't i wrote the comment when it was 95% done i am having a mental breakdown rn
-                    if (log)
-                        Debug.Log("Doing array for type " + type + " of field " + field + " and count is: " + subInstructions.Count);
-                    Array newArray = ResizeArray((Array)original.GetType().GetField(field).GetValue(original), subInstructions.Count);
-                    for (int i = 0; i < subInstructions.Count; i++)
-                        newArray.SetValue(subInstructions[i].GetArrayValue(allTransforms), i);
-                    original.GetType().GetField(field).SetValue(original, newArray);
-                }
-                else if (instruction == InstructionType.qsComponent)
-                {
-                    //Debug.Log("Running qsComponent instruction.");
-                    List<VTOLQuickStart.QuickStartComponents.QSEngine> qsEngines = new List<VTOLQuickStart.QuickStartComponents.QSEngine>();
-                    foreach (Instruction instruction in subInstructions)
-                        qsEngines.Add((VTOLQuickStart.QuickStartComponents.QSEngine)instruction.GetArrayValue(allTransforms));
-                    if (type == "quickStartComponents")
-                        ((VTOLQuickStart)original).quickStartComponents.engines = qsEngines.ToArray();
-                    else if (type == "quickStopComponents")
-                        ((VTOLQuickStart)original).quickStopComponents.engines = qsEngines.ToArray();
+                    Debug.Log("Doing array for type " + type + " of field " + field + " and count is: " + subInstructions.Count);
+                    object value = original.GetType().GetField(field).GetValue(original);
+                    if (value == null)
+                    {
+                        value = original.GetType().GetField(field).FieldType.GetConstructors()[0].Invoke(new object[] { 1 });
+                    }
+                    if (value is Array)
+                    {
+                        if (log)
+                            Debug.Log("Doing array for type " + type + " of field " + field + " and count is: " + subInstructions.Count);
+                        Array newArray = ResizeArray((Array)value, subInstructions.Count);
+                        for (int i = 0; i < subInstructions.Count; i++)
+                        {
+                            Debug.Log("Sub instruction type is " + subInstructions[i].instruction);
+                            newArray.SetValue(subInstructions[i].GetArrayValue(allTransforms), i);
+                        }
+                        original.GetType().GetField(field).SetValue(original, newArray);
+                    }
+                    else
+                    {
+                        if (log)
+                            Debug.Log("Doing IList for type " + type + " of field " + field + " and count is: " + subInstructions.Count);
+                        IList list = (IList)value;
+                        try
+                        {
+                            list.Clear();
+                        }
+                        catch (NullReferenceException e)
+                        {
+                            Debug.LogError("Couldn't get list for field " + field + " of type " + type);
+                            return;
+                        }
+                        for (int i = 0; i < subInstructions.Count; i++)
+                        {
+                            object toAdd = subInstructions[i].GetArrayValue(allTransforms);
+                            if (toAdd == null)
+                                continue;
+                            list.Add(toAdd);
+                        }
+                        original.GetType().GetField(field).SetValue(original, list);
+                    }
                 }
                 else if (instruction == InstructionType.newObject)
                 {
@@ -1068,7 +1397,17 @@ public class PlaneBaseIdentifier : MonoBehaviour
                         else
                             ctorObj.Add(null);
                     }
-                    newObject = Type.GetType(type).GetConstructor(ctorTypes.ToArray()).Invoke(ctorObj.ToArray());
+                    if (Type.GetType(type).GetConstructors().Length > 0)
+                    {
+                        try
+                        {
+                            newObject = Type.GetType(type).GetConstructor(ctorTypes.ToArray()).Invoke(ctorObj.ToArray());
+                        }
+                        catch (Exception e)
+                        {
+                            Debug.Log("The ctor nulled but idgaf.");
+                        }
+                    }
                     foreach (Instruction instruction in subInstructions)
                     {
                         //Debug.Log("Running instruction " + instruction.instruction + " of indentation " + instruction.indentation + " of field " + instruction.field + " of type " + instruction.type + " of value " + instruction.value);
@@ -1082,18 +1421,22 @@ public class PlaneBaseIdentifier : MonoBehaviour
             {
                 if (instruction == InstructionType.pointer)
                 {
+                    if (Type.GetType(type) == null)
+                    {
+                        string temp = type;
+                        type = value;
+                        value = temp;
+                        //Debug.Log("Switched type and value, type is " + type + " and value is " + value);
+                    }   
+                    if (value.Trim() == "null")
+                        return null;
                     try
                     {
-                        if (!allTransforms[value.Trim()])
-                        {
-                            Debug.LogError("Couldn't find transform for sub pointer instruction " + value.Trim());
-                            return null;
-                        }
+                        bool test = allTransforms[value.Trim()] == null;
                     }
                     catch (KeyNotFoundException e)
                     {
-                        Debug.LogError("Couldn't find transform for sub pointer instruction of type " + type + " and value " + value.Trim());
-                        return null;
+                        Debug.LogError("Couldn't find transform for sub pointer instruction " + value.Trim());
                     }
                     //Debug.Log("Try do pointer sub instruction, value is " + value + " and type is " + type + " and field is " + field);
                     if (type.Contains("GameObject"))
@@ -1134,24 +1477,9 @@ public class PlaneBaseIdentifier : MonoBehaviour
                 {
                     // array code for weird classes at some point :(
                 }
-                else if (instruction == InstructionType.qsComponent)
-                {
-                    //Debug.Log("Returning array value for qsComponent");
-                    try
-                    {
-                        VTOLQuickStart.QuickStartComponents.QSEngine qsEngine = new VTOLQuickStart.QuickStartComponents.QSEngine();
-                        qsEngine.engine = allTransforms[value.Trim()].GetComponent<ModuleEngine>();
-                        qsEngine.state = int.Parse(type.Trim());
-                        return qsEngine;
-                    }
-                    catch (KeyNotFoundException e)
-                    {
-                        Debug.LogError("Couldn't find value " + value + " for qsEngine");
-                        return null;
-                    }
-                }
                 else if (instruction == InstructionType.newObject)
                 {
+                    Debug.LogWarning("New object");
                     object newObject = null;
                     List<Type> ctorTypes = new List<Type>();
                     foreach (string type in allTypes)
@@ -1166,11 +1494,13 @@ public class PlaneBaseIdentifier : MonoBehaviour
                         else
                             ctorObj.Add(null);
                     }
-                    newObject = Type.GetType(type).GetConstructor(ctorTypes.ToArray()).Invoke(ctorObj.ToArray());
-                    foreach (Instruction instruction in subInstructions)
-                    {
-                        instruction.Run(newObject, allTransforms, false);
-                    }
+                    if (!Type.GetType(type).IsValueType)
+                        newObject = Type.GetType(type).GetConstructor(ctorTypes.ToArray()).Invoke(ctorObj.ToArray());
+                    if (subInstructions != null && subInstructions.Count > 0) // this should never be null, so i'm very confused
+                        foreach (Instruction instruction in subInstructions)
+                        {
+                            instruction.Run(newObject, allTransforms, false);
+                        }
                     return newObject;
                 }
                 Debug.LogWarning("Couldn't resolve type for sub array.");
@@ -1191,8 +1521,7 @@ public class PlaneBaseIdentifier : MonoBehaviour
                 pointer = 2,
                 events = 4,
                 array = 8,
-                qsComponent = 16,
-                newObject = 32
+                newObject = 16
             }
         }
     }
