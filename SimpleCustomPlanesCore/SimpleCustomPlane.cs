@@ -259,11 +259,13 @@ public class SimpleCustomPlane : MonoBehaviour
                     return;
                 if (line.Length >= indentation + 15 && line.Substring(0, indentation + 15) == string.Concat(Enumerable.Repeat(" ", indentation + 15)))
                 {
+                    Debug.Log("Adding to LastNewObject " + line);
                     lastNewObject.AddInstruction(line);
                     return;
                 }
                 else if (toAdd.instruction == InstructionType.newObject || toAdd.instruction == InstructionType.array)
                 {
+                    Debug.Log("adding newobject with indentation of " + (4 + indentation) + " and line is " + line);
                     lastNewObject = toAdd;
                     lastNewObject.indentation = 4 + indentation;
                 }
@@ -346,7 +348,6 @@ public class SimpleCustomPlane : MonoBehaviour
                     instruction = InstructionType.array;
                     type = NextElement(newLine, 0);
                     field = NextElement(newLine, 1);
-                    indentation = 4;
                 }
                 else if (newLine[0] == 'n')
                 {
@@ -367,7 +368,7 @@ public class SimpleCustomPlane : MonoBehaviour
                     Debug.LogWarning("Original is null");
                     return;
                 }
-                Debug.Log("Running " + instruction + " type is " + type + " field is " + field + " value is " + value);
+                //Debug.Log("Running " + instruction + " type is " + type + " field is " + field + " value is " + value);
                 if (instruction == InstructionType.assign)
                 {
                     //Debug.Log("Try do assign instruction, value is " + value + " and type is " + type + " and field is " + field);
@@ -475,6 +476,7 @@ public class SimpleCustomPlane : MonoBehaviour
                 else if (instruction == InstructionType.array)
                 {
                     // This one was fun :) no it wasn't i wrote the comment when it was 95% done i am having a mental breakdown rn
+                    Debug.Log("try do enumerable of field " + field + " and type " + type + " and sub instruction count is " + subInstructions.Count);
                     object value = original.GetType().GetField(field).GetValue(original);
                     if (value == null)
                     {

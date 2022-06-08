@@ -87,7 +87,7 @@ public class PlaneInformation
             }
             catch (Exception e)
             {
-                Debug.LogError("Caught exception while trying to load a .SCP for custom plane " + playerVehicle.vehicleName + "; stack trace as follows.\n" + e.StackTrace);
+                Debug.LogError("Caught exception while trying to load a .SCP for custom plane " + playerVehicle.vehicleName + "; stack trace as follows.\n" + e.Message + "\n" + e.StackTrace);
                 return;
             }
         }
