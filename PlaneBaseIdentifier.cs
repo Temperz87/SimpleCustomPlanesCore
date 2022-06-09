@@ -886,8 +886,8 @@ public class PlaneBaseIdentifier : MonoBehaviour
                     }
                     else if (fInfo.Length != 0)
                     {
-                        if (Type.GetType(typeName).IsValueType)
-                            return "ignore " + fieldName;
+                        //if (Type.GetType(typeName).IsValueType)
+                            //return "ignore " + fieldName;
                         List<string> allTypes = new List<string>();
                         if (Type.GetType(typeName).GetConstructors().Length > 0)
                         {
@@ -912,7 +912,7 @@ public class PlaneBaseIdentifier : MonoBehaviour
             return result;
         }
 
-        //public string ToLiteral(string input) // from https://stackoverflow.com/a/14502246
+        //public string ToLiteral(string input) // from https://stackoverflow.com/a/14502246, however if I do end up usign it i should replace this with kano's method
         //{
         //    var literal = new StringBuilder(input.Length + 2);
         //    literal.Append("\"");

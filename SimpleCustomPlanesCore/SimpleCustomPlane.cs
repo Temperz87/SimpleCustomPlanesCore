@@ -528,8 +528,7 @@ public class SimpleCustomPlane : MonoBehaviour
                         else
                             ctorObj.Add(null);
                     }
-                    Type anotherType = Type.GetType(type);
-                    if (!anotherType.IsValueType)
+                    if (Type.GetType(type).GetConstructors().Length > 0)
                     {
                         try
                         {
@@ -624,7 +623,7 @@ public class SimpleCustomPlane : MonoBehaviour
                         else
                             ctorObj.Add(null);
                     }
-                    Debug.Log("newObject type is " + type + " and field is " + field);
+                    Debug.Log("newObject sub type is " + type + " and field is " + field);
                     if (!Type.GetType(type).IsValueType)
                         newObject = Type.GetType(type).GetConstructor(ctorTypes.ToArray()).Invoke(ctorObj.ToArray());
                     if (subInstructions != null && subInstructions.Count > 0) // this should never be null, so i'm very confused

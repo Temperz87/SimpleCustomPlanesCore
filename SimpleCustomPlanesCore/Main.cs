@@ -68,7 +68,8 @@ public class Main : VTOLMOD
             Debug.LogError("Couldn't laod " + directory + bundleName);
             yield break;
         }
-        new PlaneInformation(request.assetBundle, directory);
+        Coroutine routine = StartCoroutine(new PlaneInformation().LoadFromPath(request.assetBundle, directory));
+        yield return routine;
         LoadingTemplate.instance.RemoveVehicle(bundleName);
     }
 }

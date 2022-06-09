@@ -15,16 +15,18 @@ public class PlaneInformation
 {
     public static List<PlaneInformation> planes = new List<PlaneInformation>();
 
-
-    public PlaneInformation(AssetBundle bundle, string scpPath)
+    public IEnumerator LoadFromPath(AssetBundle bundle, string scpPath)
     {
         Debug.Log("Try load plane from path " + scpPath);
-        TextAsset manifest = bundle.LoadAsset("manifest.json") as TextAsset;
-        if (manifest == null)
+        AssetBundleRequest request = bundle.LoadAssetAsync("manifest.json");
+        while (!request.isDone)
+            yield return null;
+        if (request.asset == null)
         {
             Debug.LogError("Couldn't find a manifest.json in an asset bundle.");
-            return;
+            yield break;
         }
+        TextAsset manifest = request.asset as TextAsset;
         manifestDataModel info = JsonConvert.DeserializeObject<manifestDataModel>(manifest.text);
 
         if (info.dependencyName != null && File.Exists(scpPath + "\\" + info.dependencyName))
@@ -36,11 +38,14 @@ public class PlaneInformation
         else
             Debug.Log("No depenency found for this plane at " + scpPath + "\\" + ((info.dependencyName == null) ? info.dependencyName : ""));
 
-        playerVehicle = bundle.LoadAsset(info.playerVehicle + ".asset") as PlayerVehicle;
-        if (manifest == null)
+        request = bundle.LoadAssetAsync(info.playerVehicle + ".asset");
+        while (!request.isDone)
+            yield return null;
+        playerVehicle = request.asset as PlayerVehicle;
+        if (playerVehicle == null)
         {
             Debug.LogError("Couldn't find a manifest.json in an asset bundle.");
-            return;
+            yield break;
         }
 
         baseVehicle = convertString(info.baseVehicle);
@@ -88,7 +93,7 @@ public class PlaneInformation
             catch (Exception e)
             {
                 Debug.LogError("Caught exception while trying to load a .SCP for custom plane " + playerVehicle.vehicleName + "; stack trace as follows.\n" + e.Message + "\n" + e.StackTrace);
-                return;
+                yield break;
             }
         }
 
@@ -112,7 +117,6 @@ public class PlaneInformation
         trueVehicleName = playerVehicle.vehicleName;
         planes.Add(this);
     }
-
 
     public static bool CheckCustomVehicleName(string name)
     {
