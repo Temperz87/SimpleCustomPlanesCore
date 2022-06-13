@@ -65,7 +65,7 @@ public class Main : VTOLMOD
         yield return request;
         if (request.assetBundle == null)
         {
-            Debug.LogError("Couldn't laod " + directory + bundleName);
+            Debug.LogError("Couldn't load " + directory + bundleName);
             yield break;
         }
         Coroutine routine = StartCoroutine(new PlaneInformation().LoadFromPath(request.assetBundle, directory));
@@ -157,15 +157,16 @@ public class Ensure_VehiclesLoaded
 
 [HarmonyPatch(typeof(PilotSaveManager))]
 [HarmonyPatch("EnsureVehicleCollections")]
-public class EnsureVehicleCollectionsPatch // C stop stealing my code
+public class Ensure_CustomVehicleCollections // C stop stealing my code
 {
     public static bool Prefix()
     {
         Dictionary<string, PlayerVehicle> vehicles = Traverse.Create(typeof(PilotSaveManager)).Field("vehicles").GetValue() as Dictionary<string, PlayerVehicle>;
         if (vehicles == null)
         {
-            Debug.Log("SCP: ensuring vehicle collections.");    
+            Debug.Log("SCP: ensuring vehicle collections.");
             List<PlayerVehicle> vehicleList = new List<PlayerVehicle>();
+            vehicles = new Dictionary<string, PlayerVehicle>();
             PlayerVehicleList playerVehicleList = (PlayerVehicleList)Resources.Load("PlayerVehicles");
 
             foreach (PlayerVehicle vehicle in playerVehicleList.playerVehicles)
