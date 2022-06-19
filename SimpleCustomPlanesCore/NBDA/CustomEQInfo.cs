@@ -27,7 +27,7 @@ public class CustomEqInfo
         string name = weaponObject.name;
         if (name.Contains("(Clone)"))
             name = weaponObject.name.Substring(0, weaponObject.name.IndexOf("(Clone)"));
-        VTNetworkManager.RegisterOverrideResource("SimpleCustomPlanesCore/" + name, weaponObject);
+        VTNetworkManager.RegisterOverrideResource("SimpleCustomPlanes/Missiles/" + name, weaponObject);
         if (equip is HPEquipMissileLauncher)
         {
             try

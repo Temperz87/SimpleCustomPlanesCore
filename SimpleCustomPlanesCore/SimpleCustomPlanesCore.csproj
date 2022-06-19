@@ -74,10 +74,12 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CustomAircraftSaveManager.cs" />
     <Compile Include="NBDA\Armory.cs" />
     <Compile Include="LoadoutConfigurator.cs" />
     <Compile Include="NBDA\CustomEQInfo.cs" />
     <Compile Include="NBDA\CustomWeaponHelper.cs" />
+    <Compile Include="NBDA\LinkedEquipDictionary.cs" />
     <Compile Include="NBDA\Patches\LoadoutConfigurator.cs" />
     <Compile Include="NBDA\Patches\WeaponManager.cs" />
     <Compile Include="PlaneInformation.cs" />

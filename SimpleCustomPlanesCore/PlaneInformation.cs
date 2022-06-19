@@ -10,10 +10,19 @@ using Harmony;
 using VTOLVR.Multiplayer;
 using Valve.Newtonsoft.Json;
 using System.Reflection;
+using Valve.Newtonsoft.Json.Linq;
 
 public class PlaneInformation
 {
     public static List<PlaneInformation> planes = new List<PlaneInformation>();
+
+    public PlayerVehicle playerVehicle;
+    public string trueVehicleName;
+    public Dictionary<string, string> allEquips = null;
+    public VTOLVehicles baseVehicle;
+    private VTOLVehicles campaignsToUse;
+    private VTOLVehicles configuratorToUse;
+    private VTOLVehicles equipsToUse;
 
     public IEnumerator LoadFromPath(AssetBundle bundle, string scpPath)
     {
@@ -44,7 +53,7 @@ public class PlaneInformation
         playerVehicle = request.asset as PlayerVehicle;
         if (playerVehicle == null)
         {
-            Debug.LogError("Couldn't find a manifest.json in an asset bundle.");
+            Debug.LogError("Couldn't find a playerVehicle an asset bundle.");
             yield break;
         }
 
@@ -54,7 +63,7 @@ public class PlaneInformation
         configuratorToUse = convertString(info.configurator);
         equipsToUse = convertString(info.equips);
 
-        playerVehicle.campaigns = VTResources.GetPlayerVehicle(convertString(campaignsToUse)).campaigns;
+        playerVehicle.campaigns = ((Campaign[])VTResources.GetPlayerVehicle(convertString(campaignsToUse)).campaigns.ToArray().Clone()).ToList();
         playerVehicle.loadoutConfiguratorPrefab = VTResources.GetPlayerVehicle(convertString(configuratorToUse)).loadoutConfiguratorPrefab;
         playerVehicle.uiOnlyConfiguratorPrefab = VTResources.GetPlayerVehicle(convertString(configuratorToUse)).uiOnlyConfiguratorPrefab;
 
@@ -67,7 +76,7 @@ public class PlaneInformation
                 Debug.Log("Trying to load custom weapon " + go.name);
                 try
                 {
-                    Armory.LoadGeneric(go, go.name, this, false, false);
+                    Armory.LoadGeneric(go, this, false, false);
                 }
                 catch (Exception e)
                 {
@@ -89,11 +98,33 @@ public class PlaneInformation
                 newF45.AddComponent<SimpleCustomPlane>().LoadOntoThisPlane(scpPath + "/" + playerVehicle.nickname + ".SCP", playerVehicle.vehiclePrefab);
                 GameObject.DontDestroyOnLoad(newF45);
                 playerVehicle.vehiclePrefab = newF45;
+                if (File.Exists(scpPath + "\\" + playerVehicle.nickname + ".SCLC"))
+                {
+                    Debug.Log("Found a SCLC to load.");
+                    wasActive = playerVehicle.loadoutConfiguratorPrefab.activeSelf;
+                    playerVehicle.loadoutConfiguratorPrefab.SetActive(false);
+                    GameObject newConfig = GameObject.Instantiate(playerVehicle.loadoutConfiguratorPrefab);
+                    playerVehicle.loadoutConfiguratorPrefab.SetActive(wasActive);
+                    newConfig.AddComponent<SimpleCustomPlane>().LoadOntoThisConfigurator(scpPath + "/" + playerVehicle.nickname + ".SCLC");
+                    playerVehicle.loadoutConfiguratorPrefab = newConfig;
+                    GameObject.DontDestroyOnLoad(newConfig);
+                    Debug.Log("SCLC loaded");
+                }
             }
             catch (Exception e)
             {
                 Debug.LogError("Caught exception while trying to load a .SCP for custom plane " + playerVehicle.vehicleName + "; stack trace as follows.\n" + e.Message + "\n" + e.StackTrace);
                 yield break;
+            }
+            request = bundle.LoadAssetAsync("equips.json");
+            while (!request.isDone)
+                yield return null;
+            if (request.asset != null)
+            {
+                allEquips = new Dictionary<string, string>();
+                TextAsset equips = request.asset as TextAsset;
+                JObject o1 = JObject.Parse(equips.text);
+                allEquips = o1.ToObject<Dictionary<string, string>>();
             }
         }
 
@@ -116,6 +147,21 @@ public class PlaneInformation
 
         trueVehicleName = playerVehicle.vehicleName;
         planes.Add(this);
+    }
+
+    public static PlaneInformation GetCustomVehicle(string name)
+    {
+        foreach (PlaneInformation info in planes)
+            if (info.trueVehicleName == name)
+                return info;
+        return null;
+    }
+    public static PlaneInformation GetCustomVehicleFromNickName(string nick)
+    {
+        foreach (PlaneInformation info in planes)
+            if (info.playerVehicle.nickname == nick)
+                return info;
+        return null;
     }
 
     public static bool CheckCustomVehicleName(string name)
@@ -164,13 +210,6 @@ public class PlaneInformation
         }
         return "None";
     }
-
-    public PlayerVehicle playerVehicle;
-    public string trueVehicleName;
-    public VTOLVehicles baseVehicle;
-    public VTOLVehicles campaignsToUse;
-    public VTOLVehicles configuratorToUse;
-    public VTOLVehicles equipsToUse;
 
     class manifestDataModel
     {

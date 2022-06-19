@@ -11,6 +11,8 @@ public class Inject_CustomWeapons
     [HarmonyPostfix]
     public static void Postfix(LoadoutConfigurator __instance, bool useMidflightEquips)
     {
+        if (Main.selectedPlane == null)
+            return;
         Traverse traverse = Traverse.Create(__instance);
         Dictionary<string, EqInfo> unlockedWeaponPrefabs = (Dictionary<string, EqInfo>)traverse.Field("unlockedWeaponPrefabs").GetValue();
         foreach (string name in Armory.allCustomWeapons.Keys)
@@ -23,8 +25,7 @@ public class Inject_CustomWeapons
                 CustomEqInfo info = Armory.allCustomWeapons[name];
                 if (!info.CompareTo(Main.selectedPlane))
                 {
-                    Debug.Log("Compare to somehow failed?");
-                    //continue; 
+                    continue;
                 }
                 if (info == null)
                 {

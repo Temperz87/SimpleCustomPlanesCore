@@ -21,14 +21,14 @@ public class Main : VTOLMOD
         instance = this;
     }
 
+    public static void Log(string message)
+    {
+        Debug.Log(message);
+    }
+
     public override void ModLoaded()
     {
         HarmonyInstance.Create("tempy.SCP.core").PatchAll();
-        VTOLAPI.SceneLoaded += (scene) =>
-        {
-            if (scene == VTOLScenes.ReadyRoom)
-                selectedPlane = null;
-        };
 
         PilotSelectUI ui = Resources.FindObjectsOfTypeAll<PilotSelectUI>().FirstOrDefault(); // this should be fine cuz there's not many objects here
         GameObject template = GameObject.Instantiate(ui.createPilotDisplayObject, ui.createPilotDisplayObject.transform.parent).AddComponent<LoadingTemplate>().gameObject;
@@ -61,6 +61,8 @@ public class Main : VTOLMOD
     private IEnumerator asyncLoad(string directory, string bundleName)
     {
         LoadingTemplate.instance.AddVehicle(bundleName);
+        System.Diagnostics.Stopwatch watch = new System.Diagnostics.Stopwatch();
+        watch.Start();
         AssetBundleCreateRequest request = AssetBundle.LoadFromFileAsync(directory + "/" + bundleName);
         yield return request;
         if (request.assetBundle == null)
@@ -70,7 +72,9 @@ public class Main : VTOLMOD
         }
         Coroutine routine = StartCoroutine(new PlaneInformation().LoadFromPath(request.assetBundle, directory));
         yield return routine;
+        watch.Stop();
         LoadingTemplate.instance.RemoveVehicle(bundleName);
+        Debug.Log("Loaded vehicle " + bundleName + " in " + watch.ElapsedMilliseconds / 1000 + " seconds.");
     }
 }
 
@@ -96,6 +100,8 @@ public class LoadingTemplate : MonoBehaviour
         Debug.Log("got nametext");
         transform.Find("EditNameButton").gameObject.SetActive(false);
         Debug.Log("got editname");
+        transform.Find("BackButton").gameObject.SetActive(false);
+        Debug.Log("got BackButton");
         transform.Find("StartButton").gameObject.SetActive(false);
         Debug.Log("got startbutton");
         transform.Find("Label (1)").gameObject.GetComponent<Text>().text = "Loading Vehicles";
@@ -223,25 +229,13 @@ public static class Ensure_PlayerVehiclesNamedRight
     }
 }
 
-[HarmonyPatch(typeof(PilotSave), nameof(PilotSave.GetVehicleSave))]
-public static class Ensure_VehicleSave
+[HarmonyPatch(typeof(PilotSelectUI), nameof(PilotSelectUI.SelectVehicle))]
+public static class Ensure_VehicleSelected
 {
-    public static bool Prefix(ref string vehicleID)
+    public static void Postfix(PlayerVehicle vehicle)
     {
-        if (VTOLAPI.currentScene == VTOLScenes.VehicleConfiguration)
-        {
-            foreach (PlaneInformation info in PlaneInformation.planes)
-            {
-                if (info.trueVehicleName == vehicleID)
-                {
-                    vehicleID = PlaneInformation.convertString(info.baseVehicle);
-                    Debug.Log("Changed vehicle ID");
-                    Main.selectedPlane = info;
-                    return true;
-                }
-            }
-        }
-        return true;
+        Debug.Log("SCP: Setting custom vehicle " + vehicle.nickname);
+        Main.selectedPlane = PlaneInformation.GetCustomVehicleFromNickName(vehicle.nickname);
     }
 }
 
@@ -250,10 +244,9 @@ public static class Ensure_SelectedVehicleChosen
 {
     public static bool Prefix()
     {
-        VTScenario.current.vehicle = PlaneInformation.planes[0].playerVehicle;
         if (Main.selectedPlane != null)
         {
-            Debug.Log("Changing player vehicle to custom vehicle");
+            Debug.Log("Changing player vehicle to custom vehicle " + Main.selectedPlane.trueVehicleName);
             VTScenario.current.vehicle = Main.selectedPlane.playerVehicle;
         }
         return true;
@@ -261,15 +254,59 @@ public static class Ensure_SelectedVehicleChosen
 }
 
 [HarmonyPatch(typeof(PilotSaveManager), nameof(PilotSaveManager.LoadPilotsFromFile))]
-public static class Ensure_CorrectVehicle
+public static class Ensure_VehicleLoaded
 {
     public static void Postfix()
     {
-        if (VTOLAPI.currentScene == VTOLScenes.VehicleConfiguration)
+        CustomAircraftSaveManager.LoadVSaves();
+    }
+}
+
+[HarmonyPatch(typeof(PilotSaveManager), nameof(PilotSaveManager.SavePilotsToFile))]
+public static class Ensure_VehiclesSaved
+{
+    public static void Postfix()
+    {
+        CustomAircraftSaveManager.SaveVSaves();
+    }
+}
+
+[HarmonyPatch(typeof(VehicleSave), nameof(VehicleSave.GetCampaignSave))]
+public static class Ensure_VehicleHasSave
+{
+    public static void Postfix(VehicleSave __instance, string campaignID, ref CampaignSave __result)
+    {
+        if (__result == null && PlaneInformation.CheckCustomVehicleName(__instance.vehicleName))
         {
-            Debug.Log("setting vehicle to x02s");
-            PilotSaveManager.currentVehicle = PlaneInformation.planes[0].playerVehicle;
-            Debug.Log("changed vehicle to x02s");
+            PlaneInformation info = PlaneInformation.GetCustomVehicle(__instance.vehicleName);
+            Main.Log("Adding campaign to vehicle save " + campaignID);
+            VTCampaignInfo cInfo = VTResources.GetBuiltInCampaign(campaignID);
+            if (cInfo == null)
+            {
+
+                cInfo = VTResources.GetCustomCampaign(campaignID);
+                if (cInfo == null)
+                {
+                    Debug.LogError("No campaign found for id " + campaignID);
+                    return;
+                }
+            }
+            Campaign campaign = cInfo.ToIngameCampaign();
+            CampaignSave campaignSave = new CampaignSave();
+            campaignSave.campaignName = campaign.campaignName;
+            campaignSave.campaignID = campaign.campaignID;
+            campaignSave.vehicleName = info.trueVehicleName;
+            campaignSave.completedScenarios = new List<CampaignSave.CompletedScenarioInfo>();
+            campaignSave.availableScenarios = new List<string>();
+            campaignSave.currentFuel = 1f;
+            campaignSave.currentWeapons = new string[info.playerVehicle.hardpointCount];
+            campaignSave.availableWeapons = new List<string>();
+            foreach (string item in campaign.weaponsOnStart)
+                campaignSave.availableWeapons.Add(item);
+            foreach (string item2 in campaign.scenariosOnStart)
+                campaignSave.availableScenarios.Add(item2);
+            __instance.campaignSaves.Add(campaignSave);
+            __result = campaignSave;
         }
     }
 }

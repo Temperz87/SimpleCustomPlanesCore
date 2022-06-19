@@ -17,12 +17,12 @@ public class EnsureCanAttachImmediate
 }
 
 [HarmonyPatch(typeof(LoadoutConfigurator), nameof(LoadoutConfigurator.Initialize))]
-public class InjectCustomWeapons
+public class Inject_WyvernLC
 {
     [HarmonyPrefix]
     public static bool Prefix(LoadoutConfigurator __instance)
     {
-        if (true)
+        if (Main.selectedPlane != null && Main.selectedPlane.trueVehicleName == "X-02S")
         {
             __instance.OnAttachHPIdx += delegate (int hpIdx)
             {
@@ -90,47 +90,48 @@ public static class EquipComaptibilityPatch // I stole this from c I stole this 
 {
     public static bool Prefix(LoadoutConfigurator __instance, HPEquippable equip)
     {
-        //if (__instance.wm.resourcePath != "f45a")
-        //    return true;
-
         Dictionary<string, string> allowedhardpointbyweapon = new Dictionary<string, string>();
+        if (Main.selectedPlane != null && Main.selectedPlane.trueVehicleName == "X-02S")
+        {
+            allowedhardpointbyweapon.Add("f45_gun", "0");
+            allowedhardpointbyweapon.Add("f45_aim9x1", "5,6,7,8,9,10");
+            allowedhardpointbyweapon.Add("f45_amraamInternal", "1,2,3,4,9,10");
+            allowedhardpointbyweapon.Add("f45_amraamRail", "5,6,7,8");
+            allowedhardpointbyweapon.Add("f45_sidewinderx2", "1,2,3,4,9,10");
+            allowedhardpointbyweapon.Add("f45_droptank", "5,6");
+            allowedhardpointbyweapon.Add("f45_gbu38x1", "1,2,3,4");
+            allowedhardpointbyweapon.Add("f45_gbu38x2Internal", "1,2,3,4");
+            allowedhardpointbyweapon.Add("f45_gbu38x4Internal", "1,2,3,4");
+            allowedhardpointbyweapon.Add("f45-gbu53", "1,2,3,4");
 
-        allowedhardpointbyweapon.Add("f45_gun", "0");
-        allowedhardpointbyweapon.Add("f45_aim9x1", "5,6,7,8,9,10");
-        allowedhardpointbyweapon.Add("f45_amraamInternal", "1,2,3,4,9,10");
-        allowedhardpointbyweapon.Add("f45_amraamRail", "5,6,7,8");
-        allowedhardpointbyweapon.Add("f45_sidewinderx2", "1,2,3,4,9,10");
-        allowedhardpointbyweapon.Add("f45_droptank", "5,6");
-        allowedhardpointbyweapon.Add("f45_gbu38x1", "1,2,3,4");
-        allowedhardpointbyweapon.Add("f45_gbu38x2Internal", "1,2,3,4");
-        allowedhardpointbyweapon.Add("f45_gbu38x4Internal", "1,2,3,4");
-        allowedhardpointbyweapon.Add("f45-gbu53", "1,2,3,4");
+            allowedhardpointbyweapon.Add("f45_gbu12x1", "");
+            allowedhardpointbyweapon.Add("f45_gbu12x2Internal", "");
+            allowedhardpointbyweapon.Add("f45-agm145I", "");
+            allowedhardpointbyweapon.Add("f45-agm145It", "");
+            allowedhardpointbyweapon.Add("f45-agm145ISide", "");
+            allowedhardpointbyweapon.Add("f45-agm145x3", "");
+            allowedhardpointbyweapon.Add("f45-gbu39", "");
+            allowedhardpointbyweapon.Add("f45_mk82Internal", "");
+            allowedhardpointbyweapon.Add("f45_mk82x1", "");
+            allowedhardpointbyweapon.Add("f45_mk82x4Internal", "");
+            allowedhardpointbyweapon.Add("f45_mk83x1", "");
+            allowedhardpointbyweapon.Add("f45_mk83x1Internal", "");
+            allowedhardpointbyweapon.Add("f45_agm161", "");
+            allowedhardpointbyweapon.Add("f45_agm161Internal", "");
+        }
+        else if (Main.selectedPlane != null && Main.selectedPlane.allEquips != null)
+            allowedhardpointbyweapon = Main.selectedPlane.allEquips;
 
-        allowedhardpointbyweapon.Add("f45_gbu12x1", "");
-        allowedhardpointbyweapon.Add("f45_gbu12x2Internal", "");
-        allowedhardpointbyweapon.Add("f45-agm145I", "");
-        allowedhardpointbyweapon.Add("f45-agm145It", "");
-        allowedhardpointbyweapon.Add("f45-agm145ISide", "");
-        allowedhardpointbyweapon.Add("f45-agm145x3", "");
-        allowedhardpointbyweapon.Add("f45-gbu39", "");
-        allowedhardpointbyweapon.Add("f45_mk82Internal", "");
-        allowedhardpointbyweapon.Add("f45_mk82x1", "");
-        allowedhardpointbyweapon.Add("f45_mk82x4Internal", "");
-        allowedhardpointbyweapon.Add("f45_mk83x1", "");
-        allowedhardpointbyweapon.Add("f45_mk83x1Internal", "");
-        allowedhardpointbyweapon.Add("f45_agm161", "");
-        allowedhardpointbyweapon.Add("f45_agm161Internal", "");
-
-        //Debug.Log("Equipment: " + equip.name + " previously allowed on" + equip.allowedHardpoints);
+        Debug.Log("Equipment: " + equip.name + " previously allowed on" + equip.allowedHardpoints);
 
         if (allowedhardpointbyweapon.ContainsKey(equip.name))
         {
             equip.allowedHardpoints = (string)allowedhardpointbyweapon[equip.name];
-            //Debug.Log("Equipment: " + equip.name + " now allowed on" + equip.allowedHardpoints);
+            Debug.Log("Equipment: " + equip.name + " now allowed on" + equip.allowedHardpoints);
         }
         else
         {
-            //Debug.Log("Equipment: " + equip.name + ", not in dictionary");
+            Debug.Log("Equipment: " + equip.name + ", not in dictionary");
         }
         return true;
     }

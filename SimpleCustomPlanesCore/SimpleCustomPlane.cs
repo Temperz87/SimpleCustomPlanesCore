@@ -19,6 +19,11 @@ public class SimpleCustomPlane : MonoBehaviour
         Load(path);
     }
 
+    public void LoadOntoThisConfigurator(string path)
+    {
+        Load(path);
+    }
+
     private string HashTransform(Transform transform, List<string> allNames)
     {
         if (transform.name.Contains("(Clone)"))

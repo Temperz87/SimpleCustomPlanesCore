@@ -10,33 +10,25 @@ using VTOLVR.Multiplayer;
 using Valve.Newtonsoft.Json;
 using Valve.Newtonsoft.Json.Linq;
 
-public class Armory
+public static class Armory
 {
     public static Dictionary<string, CustomEqInfo> allCustomWeapons = new Dictionary<string, CustomEqInfo>();
 
-    public static GameObject LoadGeneric(GameObject weaponObject, string name, PlaneInformation vehicle, bool isExclude, bool isWMD, string equipPoints = null)
+    public static GameObject LoadGeneric(GameObject weaponObject, PlaneInformation vehicle, bool isExclude, bool isWMD, string equipPoints = null)
     {
         if (weaponObject == null)
         {
             Debug.LogError("Tried to load a null weapon.");
             return null;
         }
-        Debug.Log("to inject");
-        GameObject weaponToInject = weaponObject;
-        Debug.Log("name");
-        weaponToInject.name = name;
-        Debug.Log("destroy on load");
-        GameObject.DontDestroyOnLoad(weaponToInject);
-        Debug.Log("audiosources");
-        foreach (AudioSource source in weaponToInject.GetComponentsInChildren<AudioSource>(true))
+        GameObject.DontDestroyOnLoad(weaponObject);
+        foreach (AudioSource source in weaponObject.GetComponentsInChildren<AudioSource>(true))
         {
-            Debug.Log("got a source");
             source.outputAudioMixerGroup = VTResources.GetExteriorMixerGroup();
         }
         HPEquipMissileLauncher launcher = weaponObject.GetComponent<HPEquipMissileLauncher>();
         if (launcher) // I know this solution isn't optimized in the slightest, but meh
         {
-            Debug.Log("got a launcher");
             GameObject dummyEquipper = Resources.Load("hpequips/afighter/fa26_iris-t-x1") as GameObject; // can't async this as we still need the return so rip
             HPEquipIRML irml = dummyEquipper.GetComponent<HPEquipIRML>();
             launcher.ml.launchAudioClips[0] = GameObject.Instantiate(irml.ml.launchAudioClips[0]);
@@ -66,12 +58,10 @@ public class Armory
                 }
             }
         }
-        Debug.Log("all custom weapons");
-        allCustomWeapons.Add(name, new CustomEqInfo(weaponToInject, vehicle, isExclude, isWMD, equipPoints));
-        Debug.Log("set active");
-        weaponToInject.SetActive(false);
-        Debug.Log("Loaded " + name);
-        return weaponToInject;
+        allCustomWeapons.Add(weaponObject.name, new CustomEqInfo(weaponObject, vehicle, isExclude, isWMD, equipPoints));
+        weaponObject.SetActive(false);
+        Debug.Log("Loaded " + weaponObject);
+        return weaponObject;
     }
 
     public static bool CheckCustomWeapon(string name)
