@@ -17,7 +17,7 @@ public class EnsureCanAttachImmediate
 }
 
 [HarmonyPatch(typeof(LoadoutConfigurator), nameof(LoadoutConfigurator.Initialize))]
-public class Inject_WyvernLC
+public class Inject_OurEquips
 {
     [HarmonyPrefix]
     public static bool Prefix(LoadoutConfigurator __instance)
@@ -81,10 +81,27 @@ public class Inject_WyvernLC
 
             Debug.Log("__instance setup complete.");
         }
+        
+        //List<string> newAllowedEquips = new List<string>();
+        //foreach (string oldEquip in __instance.availableEquipStrings)
+        //{
+        //    // Checks Linked list in LinkedEquipDictionary for new equip
+        //    string[] linked = LinkedEquipDictionary.GetLinkedList(oldEquip, Main.selectedPlane.campaignsToUse);
+        //    if (linked != null)
+        //    {
+        //        foreach (string linkedEquip in linked)
+        //        {
+        //            newAllowedEquips.Add(linkedEquip);
+        //        }
+        //    }
+        //}
+
+        //__instance.availableEquipStrings = newAllowedEquips;
+
         return true;
     }
-
 }
+
 [HarmonyPatch(typeof(LoadoutConfigurator), "EquipCompatibilityMask")]
 public static class EquipComaptibilityPatch // I stole this from c I stole this from C
 {
@@ -127,7 +144,7 @@ public static class EquipComaptibilityPatch // I stole this from c I stole this 
         if (allowedhardpointbyweapon.ContainsKey(equip.name))
         {
             equip.allowedHardpoints = (string)allowedhardpointbyweapon[equip.name];
-            Debug.Log("Equipment: " + equip.name + " now allowed on" + equip.allowedHardpoints);
+            Debug.Log("Equipment: " + equip.name + " now allowed on " + equip.allowedHardpoints);
         }
         else
         {

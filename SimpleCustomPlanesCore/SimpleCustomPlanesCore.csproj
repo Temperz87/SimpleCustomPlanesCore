@@ -75,6 +75,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="CustomAircraftSaveManager.cs" />
+    <Compile Include="LoadingTemplate.cs" />
     <Compile Include="NBDA\Armory.cs" />
     <Compile Include="LoadoutConfigurator.cs" />
     <Compile Include="NBDA\CustomEQInfo.cs" />
@@ -82,6 +83,12 @@
     <Compile Include="NBDA\LinkedEquipDictionary.cs" />
     <Compile Include="NBDA\Patches\LoadoutConfigurator.cs" />
     <Compile Include="NBDA\Patches\WeaponManager.cs" />
+    <Compile Include="Patches\CampaignInfoUI.cs" />
+    <Compile Include="Patches\CampaignSelectorUI.cs" />
+    <Compile Include="Patches\PilotSaveManager.cs" />
+    <Compile Include="Patches\PilotSelectUI.cs" />
+    <Compile Include="Patches\PlayerSpawn.cs" />
+    <Compile Include="Patches\VehicleSave.cs" />
     <Compile Include="PlaneInformation.cs" />
     <Compile Include="SimpleCustomPlane.cs" />
     <Compile Include="Main.cs" />

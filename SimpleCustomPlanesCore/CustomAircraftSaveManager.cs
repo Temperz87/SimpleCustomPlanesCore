@@ -22,6 +22,11 @@ public static class CustomAircraftSaveManager
             Main.Log("allsave");
             List<VehicleSave> allSaves = new List<VehicleSave>();
             Main.Log("save");
+            if (!PilotSaveManager.pilots.ContainsKey(pilotName))
+            {
+                Main.Log(pilotName + " was not found.");
+                continue;
+            }
             PilotSave save = PilotSaveManager.pilots[pilotName];
             Main.Log("traverse");
             Traverse pilotTraverse = Traverse.Create(save);

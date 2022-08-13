@@ -8,6 +8,7 @@ public static class LinkedEquipDictionary
 {
     public static string[] linkedList42 = new string[]
     {
+        "gau-8;fa26_gun;f45_gun;",
         "42c_aim9ex1;fa26_aim9e;",
         "42c_aim9ex2;fa26_aim9ex2;",
         "agm89x1;fa26_agm89x1;",
@@ -44,6 +45,7 @@ public static class LinkedEquipDictionary
     };
     public static string[] linkedList26 = new string[]
     {
+        "fa26_gun;gau-8;f45_gun;",
         "af_aim9;sidewinderx1;",
         "af_amraam;",
         "af_amraamRail;",
@@ -89,6 +91,7 @@ public static class LinkedEquipDictionary
 
     public static string[] linkedList45 = new string[]
     {
+        "f45_gun;fa26_gun;gau-8;",
         "f45-agm145I;",
         "f45-agm145ISide;",
         "f45-agm145x3;",
@@ -137,6 +140,34 @@ public static class LinkedEquipDictionary
         }
         return false;
     }
+
+    // Checks a list of names for a match with the given name, then returns them. Returns null if nothing is found
+    public static string[] GetLinkedList(string name, VTOLVehicles compareAgainst) // This function was entirely generated with github copilot, and I only capatilized the first letter, I am VERY suprised and concerned
+    {
+        string[] toCompare;
+        switch (compareAgainst)
+        {
+            case VTOLVehicles.AV42C:
+                toCompare = linkedList42;
+                break;
+            case VTOLVehicles.FA26B:
+                toCompare = linkedList26;
+                break;
+            case VTOLVehicles.F45A:
+                toCompare = linkedList45;
+                break;
+            default:
+                toCompare = null;
+                break;
+        }
+        foreach (string other in toCompare)
+        {
+            if (other.Contains(name))
+                return other.Split(';');
+        }
+        return null;
+    }
+
     public static string[] vtol = new string[]
     {
         "42c_aim9ex1",
@@ -184,7 +215,6 @@ public static class LinkedEquipDictionary
         "af_amraamRail",
         "af_amraamRailx2",
         "af_dropTank",
-        "af_gun",
         "af_maverickx1",
         "af_maverickx3",
         "af_mk82",

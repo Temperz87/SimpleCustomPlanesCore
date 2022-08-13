@@ -13,13 +13,21 @@ using Valve.Newtonsoft.Json.Linq;
 public static class Armory
 {
     public static Dictionary<string, CustomEqInfo> allCustomWeapons = new Dictionary<string, CustomEqInfo>();
+    private static HPEquipIRML irml;
 
-    public static GameObject LoadGeneric(GameObject weaponObject, PlaneInformation vehicle, bool isExclude, bool isWMD, string equipPoints = null)
+    public static IEnumerator Init()
+    {
+        ResourceRequest request = Resources.LoadAsync("hpequips/afighter/fa26_iris-t-x1");
+        yield return request;
+        irml = ((GameObject)request.asset).GetComponent<HPEquipIRML>();
+    }
+
+    public static void LoadGeneric(GameObject weaponObject, PlaneInformation vehicle, bool isExclude, bool isWMD, string equipPoints = null)
     {
         if (weaponObject == null)
         {
             Debug.LogError("Tried to load a null weapon.");
-            return null;
+            return;
         }
         GameObject.DontDestroyOnLoad(weaponObject);
         foreach (AudioSource source in weaponObject.GetComponentsInChildren<AudioSource>(true))
@@ -29,8 +37,6 @@ public static class Armory
         HPEquipMissileLauncher launcher = weaponObject.GetComponent<HPEquipMissileLauncher>();
         if (launcher) // I know this solution isn't optimized in the slightest, but meh
         {
-            GameObject dummyEquipper = Resources.Load("hpequips/afighter/fa26_iris-t-x1") as GameObject; // can't async this as we still need the return so rip
-            HPEquipIRML irml = dummyEquipper.GetComponent<HPEquipIRML>();
             launcher.ml.launchAudioClips[0] = GameObject.Instantiate(irml.ml.launchAudioClips[0]);
             launcher.ml.launchAudioSources[0].outputAudioMixerGroup = irml.ml.launchAudioSources[0].outputAudioMixerGroup;
 
@@ -61,7 +67,6 @@ public static class Armory
         allCustomWeapons.Add(weaponObject.name, new CustomEqInfo(weaponObject, vehicle, isExclude, isWMD, equipPoints));
         weaponObject.SetActive(false);
         Debug.Log("Loaded " + weaponObject);
-        return weaponObject;
     }
 
     public static bool CheckCustomWeapon(string name)

@@ -558,6 +558,7 @@ public class SimpleCustomPlane : MonoBehaviour
                 {
                     if (Type.GetType(type) == null)
                     {
+                        // Debug the instruction type
                         string temp = type;
                         type = value;
                         value = temp;

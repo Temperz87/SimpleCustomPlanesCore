@@ -20,7 +20,7 @@ public class PlaneInformation
     public string trueVehicleName;
     public Dictionary<string, string> allEquips = null;
     public VTOLVehicles baseVehicle;
-    private VTOLVehicles campaignsToUse;
+    public VTOLVehicles campaignsToUse;
     private VTOLVehicles configuratorToUse;
     private VTOLVehicles equipsToUse;
 
@@ -58,8 +58,8 @@ public class PlaneInformation
         }
 
         baseVehicle = convertString(info.baseVehicle);
-        //campaignsToUse = convertString(info.campaign);
-        campaignsToUse = baseVehicle;
+        campaignsToUse = convertString(info.campaign);
+        //campaignsToUse = baseVehicle;
         configuratorToUse = convertString(info.configurator);
         equipsToUse = convertString(info.equips);
 
@@ -85,7 +85,7 @@ public class PlaneInformation
             }
         }
 
-        playerVehicle.allEquipPrefabs = new List<GameObject>((GameObject[])VTResources.GetPlayerVehicle(convertString(campaignsToUse)).allEquipPrefabs.ToArray().Clone());
+        playerVehicle.allEquipPrefabs = new List<GameObject>((GameObject[])VTResources.GetPlayerVehicle(convertString(equipsToUse)).allEquipPrefabs.ToArray().Clone());
         if (baseVehicle != VTOLVehicles.None)
         {
             GameObject basePlane = VTResources.GetPlayerVehicle(convertString(baseVehicle)).vehiclePrefab;
@@ -195,6 +195,8 @@ public class PlaneInformation
         }
         return VTOLVehicles.None;
     }
+
+
     public static string convertString(VTOLVehicles convert)
     {
         switch (convert)
